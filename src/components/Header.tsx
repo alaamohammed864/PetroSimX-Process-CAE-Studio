@@ -1,5 +1,6 @@
 import React from 'react';
 import { UnitSystem, ViewTab } from '../types/simulation';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 interface HeaderProps {
   currentTab: ViewTab;
@@ -15,6 +16,8 @@ interface HeaderProps {
   onNewProject: () => void;
   onOpenProject: () => void;
   onSaveProject: () => void;
+  onOpenProjectManager?: () => void;
+  projectName?: string;
   onAddUnit: (type: 'reactor' | 'heatex' | 'furnace' | 'pump' | 'vessel' | 'column') => void;
   onAddStream: () => void;
   snapEnabled: boolean;
@@ -38,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNewProject,
   onOpenProject,
   onSaveProject,
+  onOpenProjectManager,
+  projectName = 'Ammonia Synthesis Loop Flowsheet',
   onAddUnit,
   onAddStream,
   snapEnabled,
@@ -61,15 +66,24 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1.5 pl-2">
             <span className="material-symbols-outlined text-[#4cd7f6] text-[15px]">account_tree</span>
             <span className="font-semibold tracking-tight text-[#dae2fd] uppercase text-[12px]">PETROSIMX</span>
-            <span className="font-mono text-[10px] text-[#869397]">v4.8.2-PRO</span>
+            <span className="font-mono text-[10px] text-[#869397]">OFFLINE-CAE</span>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-[#171f33] px-2 py-0.5 rounded border border-[#3d494c]/40">
-            <span className="font-mono text-[10.5px] text-[#4cd7f6]">[PROJECT-01: Hydrocracker_Preheat_Train.petx*]</span>
-          </div>
+          <button
+            onClick={onOpenProjectManager}
+            className="flex items-center gap-1.5 bg-[#171f33] hover:bg-[#222a3d] px-2 py-0.5 rounded border border-[#3d494c]/40 text-left transition-colors"
+            title="Open Project Manager & Offline Database"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[12px] text-[#4cd7f6]">inventory_2</span>
+            <span className="font-mono text-[10.5px] text-[#4cd7f6] max-w-[280px] truncate">[{projectName}.petx]</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* PWA Install Button */}
+          <PWAInstallButton />
+
           {/* EOS Selector */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#131b2e] border border-[#3d494c]/30 text-[10.5px]">
             <span className="text-[#869397] font-mono">EOS:</span>
@@ -89,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1bbd85]/20 border border-[#4edea3]/30">
             <div className={`w-1.5 h-1.5 rounded-full ${isSolving ? 'bg-[#ffb95f] animate-ping' : 'bg-[#4edea3]'}`} />
             <span className={`font-mono text-[10px] ${isSolving ? 'text-[#ffb95f]' : 'text-[#4edea3]'}`}>
-              {isSolving ? 'ITERATING (Wegstein)...' : 'CONVERGED (12ms)'}
+              {isSolving ? 'ITERATING (Worker)...' : 'CONVERGED (Local)'}
             </span>
           </div>
 
@@ -125,6 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
             { id: 'reactor-engineering', label: 'Reactors' },
             { id: 'sensitivity-optimization', label: 'Optimization' },
             { id: 'energy-utilities', label: 'Energy & Emissions' },
+            { id: 'engineering-reports', label: 'Reports & Audits' },
             { id: 'stream-matrix', label: 'Matrix Sheets' },
             { id: 'digital-twin-monitor', label: 'Digital Twin' },
           ].map((tab) => {
@@ -279,6 +294,20 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <span className="material-symbols-outlined text-[15px]">view_in_ar</span>
           <span>3D PLANT</span>
+        </button>
+
+        <button
+          onClick={() => onTabChange(currentTab === 'engineering-reports' ? 'flowsheet-canvas' : 'engineering-reports')}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10.5px] font-semibold transition-all ${
+            currentTab === 'engineering-reports'
+              ? 'bg-[#4edea3]/30 text-[#4edea3] border border-[#4edea3]'
+              : 'hover:bg-[#171f33] text-[#4edea3] border border-[#4edea3]/40'
+          }`}
+          title="Open Professional Engineering Reports Studio"
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[15px]">assignment</span>
+          <span>REPORTS</span>
         </button>
 
         <div className="h-4 w-px bg-[#3d494c]/40 mx-1" />

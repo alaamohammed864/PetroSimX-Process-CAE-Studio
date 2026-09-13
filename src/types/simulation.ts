@@ -138,4 +138,5 @@ export type ViewTab =
   | 'sensitivity-optimization' 
   | 'energy-utilities'
   | 'stream-matrix' 
-  | 'digital-twin-monitor';
+  | 'digital-twin-monitor'
+  | 'engineering-reports';

@@ -60,3 +60,80 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #4cd7f6;
 }
+
+/* Professional Engineering Report Print Stylesheet */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    user-select: text !important;
+    overflow: visible !important;
+  }
+
+  /* Hide app navigation chrome, header, sidebars, diagnostic consoles during print */
+  header,
+  nav,
+  .no-print,
+  .app-header,
+  .diagnostic-dock,
+  .app-statusbar {
+    display: none !important;
+  }
+
+  /* Force report container to take full paper width */
+  .printable-report-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .printable-report-container * {
+    background-color: transparent !important;
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Keep status badges clearly outlined and readable */
+  .report-badge {
+    border: 1px solid #374151 !important;
+    font-weight: 600 !important;
+    padding: 1px 4px !important;
+  }
+
+  /* Avoid breaking inside cards or table rows */
+  .page-break-inside-avoid,
+  table,
+  tr,
+  .report-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Page break hints */
+  .page-break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Clean engineering table print borders */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #9ca3af !important;
+    padding: 4px 6px !important;
+    font-size: 9.5pt !important;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    font-weight: 700 !important;
+  }
+}

@@ -29,11 +29,17 @@ import { OptimizationView } from './components/views/OptimizationView';
 import { ColumnDesignView } from './components/views/ColumnDesignView';
 import { EnergyUtilitiesView } from './components/views/EnergyUtilitiesView';
 import { Plant3DViewer } from './components/plant3d/Plant3DViewer';
+import { EngineeringReportsView } from './components/views/EngineeringReportsView';
 import { DecisionVariable, ProcessCase } from './types/optimization';
 import { SimulationTaskController } from './engine/worker/simulationWorkerClient';
 import { generateStructuredReport, StructuredEngineeringReport } from './engine/reporting/engineeringReportGenerator';
 import { ConvergenceIterationRecord } from './engine/solver/recycleSolver';
 import { ProcessValidationReport } from './engine/validation/processValidator';
+import { SimulationResult } from './engine/solver/simulationManager';
+import { localDb, ProjectRecord, RecoverySnapshotRecord } from './engine/storage/indexedDbClient';
+import { ProjectManagerModal } from './components/modals/ProjectManagerModal';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
+import { useAutoSaveAndRecovery } from './hooks/useAutoSaveAndRecovery';
 
 export default function App() {
   // Core simulation state
@@ -42,6 +48,24 @@ export default function App() {
   const [components, setComponents] = useState<ChemicalComponent[]>(INITIAL_COMPONENTS);
   const [selectedUnitId, setSelectedUnitId] = useState<string>('R-101');
   const [selectedStreamId, setSelectedStreamId] = useState<string | null>(null);
+
+  // Project and Offline Storage state
+  const [currentProject, setCurrentProject] = useState<ProjectRecord>({
+    id: 'proj-ammonia-synth-rev3',
+    name: 'Ammonia Synthesis Loop Flowsheet',
+    description: 'High-pressure Haber-Bosch catalytic loop with multi-bed converter, heat recovery network, and cryogenic separator recycle',
+    author: 'Lead Process Modeler',
+    facility: 'Plant Section 400 - Synthesis Loop',
+    revision: '3',
+    version: '1.2.0',
+    unitSystem: 'SI',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isDefault: true,
+    unitCount: INITIAL_UNITS.length,
+    streamCount: INITIAL_STREAMS.length,
+  });
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState<boolean>(false);
 
   // App navigation and system settings
   const [currentTab, setCurrentTab] = useState<ViewTab>('flowsheet-canvas');
@@ -59,11 +83,44 @@ export default function App() {
   const [convergenceHistory, setConvergenceHistory] = useState<ConvergenceIterationRecord[]>([]);
   const [engineeringReport, setEngineeringReport] = useState<StructuredEngineeringReport | null>(null);
   const [validationReport, setValidationReport] = useState<ProcessValidationReport | null>(null);
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const taskControllerRef = useRef<SimulationTaskController>(new SimulationTaskController());
 
   // Modals
   const [isSensitivityOpen, setIsSensitivityOpen] = useState<boolean>(false);
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
+
+  // Auto-Save and Crash Recovery
+  const {
+    pendingRecovery,
+    acceptRecovery,
+    dismissRecovery,
+  } = useAutoSaveAndRecovery({
+    currentProject,
+    units,
+    streams,
+    components,
+    onRestoreSnapshot: (snapshot) => {
+      setUnits(snapshot.units);
+      setStreams(snapshot.streams);
+      setComponents(snapshot.components);
+      setCurrentProject((prev) => ({
+        ...prev,
+        name: snapshot.projectName,
+        updatedAt: snapshot.timestamp,
+      }));
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}`,
+          time: new Date().toTimeString().split(' ')[0],
+          type: 'success',
+          message: `Restored unsaved flowsheet session from ${new Date(snapshot.timestamp).toLocaleTimeString()}.`,
+        },
+      ]);
+    },
+    autoSaveIntervalMs: 30000,
+  });
 
   // Active selected entities
   const selectedUnit = useMemo(
@@ -377,6 +434,7 @@ export default function App() {
       setConvergenceHistory(simResult.convergenceHistory);
       setMassResidual(simResult.globalMaterialBalance.massImbalanceKgH);
       setEnergyResidual(simResult.globalEnergyBalance.energyImbalanceKW);
+      setSimulationResult(simResult);
       if (simResult.validationReport) {
         setValidationReport(simResult.validationReport);
       }
@@ -502,23 +560,56 @@ export default function App() {
   }, []);
 
   const handleNewProject = useCallback(() => {
-    if (window.confirm('Create new flowsheet project? Unsaved changes will be cleared.')) {
-      setUnits(INITIAL_UNITS);
-      setStreams(INITIAL_STREAMS);
-      setComponents(INITIAL_COMPONENTS);
-      setSelectedUnitId('R-101');
-      setSelectedStreamId(null);
-      setLogs(INITIAL_LOGS);
-    }
+    setIsProjectManagerOpen(true);
   }, []);
 
   const handleOpenProject = useCallback(() => {
-    alert('Project file repository: Hydrocracker_Reformer_Rev4.sim loaded.');
+    setIsProjectManagerOpen(true);
   }, []);
 
-  const handleSaveProject = useCallback(() => {
-    alert('Project saved to PetroSimX Cloud Workspace successfully.');
-  }, []);
+  const handleSaveProject = useCallback(async () => {
+    try {
+      const now = new Date().toISOString();
+      const updated: ProjectRecord = {
+        ...currentProject,
+        unitCount: units.length,
+        streamCount: streams.length,
+        lastConverged: simulationResult?.converged ?? true,
+        updatedAt: now,
+      };
+      await localDb.saveProject(updated);
+      await localDb.saveCase({
+        id: `case-${currentProject.id}`,
+        projectId: currentProject.id,
+        name: 'Active Flowsheet State',
+        updatedAt: now,
+        units,
+        streams,
+        components,
+      });
+      setCurrentProject(updated);
+      const timeStr = new Date().toTimeString().split(' ')[0];
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}-save`,
+          time: timeStr,
+          type: 'success',
+          message: `Saved project "${currentProject.name}" to local IndexedDB database. All ${units.length} units and ${streams.length} streams persisted.`,
+        },
+      ]);
+    } catch (err: any) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}-save-err`,
+          time: new Date().toTimeString().split(' ')[0],
+          type: 'warn',
+          message: `Could not save to local IndexedDB: ${err?.message}`,
+        },
+      ]);
+    }
+  }, [currentProject, units, streams, components, simulationResult]);
 
   const handleFitView = useCallback(() => {
     // Reset canvas view focus
@@ -569,6 +660,8 @@ export default function App() {
         onNewProject={handleNewProject}
         onOpenProject={handleOpenProject}
         onSaveProject={handleSaveProject}
+        onOpenProjectManager={() => setIsProjectManagerOpen(true)}
+        projectName={currentProject.name}
         onAddUnit={handleAddUnit}
         onAddStream={handleAddStream}
         snapEnabled={snapEnabled}
@@ -577,6 +670,34 @@ export default function App() {
         equationOfState={eos}
         onChangeEos={setEos}
       />
+
+      {/* Unsaved Session / Crash Recovery Notification Banner */}
+      {pendingRecovery && (
+        <div className="bg-[#171f33] border-b-2 border-[#ffb95f] px-4 py-1.5 flex items-center justify-between text-xs font-mono text-[#ffddb8] z-40 shrink-0 shadow-lg animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[17px] text-[#ffb95f]">restore</span>
+            <span>
+              Unsaved Session Detected: Recovery checkpoint found for &quot;<strong className="text-white">{pendingRecovery.projectName}</strong>&quot; ({new Date(pendingRecovery.timestamp).toLocaleTimeString()}).
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={acceptRecovery}
+              className="px-2.5 py-0.5 bg-[#ffb95f] hover:bg-[#ffa726] text-[#2c1600] font-bold rounded text-[10.5px] transition-all"
+              type="button"
+            >
+              Restore Flowsheet
+            </button>
+            <button
+              onClick={dismissRecovery}
+              className="px-2 py-0.5 text-[#869397] hover:text-white text-[10.5px]"
+              type="button"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Views */}
       <main className="flex-1 flex overflow-hidden relative">
@@ -726,6 +847,18 @@ export default function App() {
             />
           </div>
         )}
+
+        {currentTab === 'engineering-reports' && (
+          <EngineeringReportsView
+            units={units}
+            streams={streams}
+            components={components}
+            unitSystem={unitSystem}
+            simulationResult={simulationResult}
+            validationReport={validationReport}
+            onNavigateToFlowsheet={() => setCurrentTab('flowsheet-canvas')}
+          />
+        )}
       </main>
 
       {/* Bottom Diagnostic Console & Solver Matrix Dock */}
@@ -745,7 +878,10 @@ export default function App() {
         isSolving={isSolving}
         engineeringReport={engineeringReport}
         validationReport={validationReport}
+        simulationResult={simulationResult}
+        units={units}
         onTriggerSolve={handleSolve}
+        onOpenReportsStudio={() => setCurrentTab('engineering-reports')}
       />
 
       {/* Sensitivity Analysis Modal */}
@@ -761,6 +897,41 @@ export default function App() {
       {isConverterOpen && (
         <UnitConverterModal onClose={() => setIsConverterOpen(false)} />
       )}
+
+      {/* PetroSimX Project & Offline Storage Manager Modal */}
+      <ProjectManagerModal
+        isOpen={isProjectManagerOpen}
+        onClose={() => setIsProjectManagerOpen(false)}
+        currentProject={currentProject}
+        units={units}
+        streams={streams}
+        components={components}
+        simulationResult={simulationResult}
+        unitSystem={unitSystem}
+        onLoadProject={(pkg) => {
+          setCurrentProject(pkg.project);
+          setUnits(pkg.units);
+          setStreams(pkg.streams);
+          setComponents(pkg.components);
+          setSelectedUnitId(pkg.units[0]?.id || '');
+          setSelectedStreamId(null);
+          setLogs((prev) => [
+            ...prev,
+            {
+              id: `log-${Date.now()}`,
+              time: new Date().toTimeString().split(' ')[0],
+              type: 'info',
+              message: `Opened project "${pkg.project.name}" (${pkg.units.length} units, ${pkg.streams.length} streams).`,
+            },
+          ]);
+        }}
+        onUpdateCurrentProject={(updated) => {
+          setCurrentProject((prev) => ({ ...prev, ...updated }));
+        }}
+      />
+
+      {/* Floating Offline Mode Indicator Badge */}
+      <OfflineIndicator />
     </div>
   );
 }

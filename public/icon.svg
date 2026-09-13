@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1326" />
+      <stop offset="50%" stop-color="#131b2e" />
+      <stop offset="100%" stop-color="#060e20" />
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4cd7f6" />
+      <stop offset="100%" stop-color="#00a3c4" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4edea3" />
+      <stop offset="100%" stop-color="#00875a" />
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffb95f" />
+      <stop offset="100%" stop-color="#f57c00" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)" stroke="#3d494c" stroke-width="8" />
+
+  <!-- Outer Engineering Hexagon Grid -->
+  <polygon points="256,60 420,155 420,345 256,440 92,345 92,155" fill="none" stroke="#3d494c" stroke-width="4" stroke-dasharray="8,6" opacity="0.4" />
+
+  <!-- Process Flow Piping Nodes -->
+  <path d="M 120 256 L 200 256 L 256 180 L 320 180 L 380 256 L 380 340 L 256 340 L 200 256" fill="none" stroke="url(#cyanGrad)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+
+  <!-- Central Chemical Reactor / Column Vessel -->
+  <rect x="226" y="140" width="60" height="150" rx="30" fill="#171f33" stroke="url(#cyanGrad)" stroke-width="8" />
+  
+  <!-- Column Internal Trays -->
+  <line x1="236" y1="180" x2="276" y2="180" stroke="#4edea3" stroke-width="4" stroke-linecap="round" />
+  <line x1="236" y1="215" x2="276" y2="215" stroke="#ffb95f" stroke-width="4" stroke-linecap="round" />
+  <line x1="236" y1="250" x2="276" y2="250" stroke="#4cd7f6" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Distillation Dome Top & Bottom -->
+  <circle cx="256" cy="140" r="14" fill="url(#emeraldGrad)" />
+  <circle cx="256" cy="290" r="14" fill="url(#orangeGrad)" />
+
+  <!-- Molecular Reaction Node Rings -->
+  <circle cx="120" cy="256" r="18" fill="#131b2e" stroke="url(#emeraldGrad)" stroke-width="6" />
+  <circle cx="380" cy="256" r="18" fill="#131b2e" stroke="url(#orangeGrad)" stroke-width="6" />
+  <circle cx="380" cy="340" r="16" fill="#131b2e" stroke="url(#cyanGrad)" stroke-width="5" />
+
+  <!-- Flow Direction Arrows -->
+  <polygon points="175,250 190,256 175,262" fill="#4edea3" />
+  <polygon points="290,175 305,180 290,185" fill="#4cd7f6" />
+  <polygon points="345,340 330,346 330,334" fill="#ffb95f" />
+
+  <!-- PETROSIMX Monogram Text -->
+  <text x="256" y="415" font-family="'JetBrains Mono', monospace" font-size="40" font-weight="900" fill="#dae2fd" text-anchor="middle" letter-spacing="4">PETROSIMX</text>
+  <text x="256" y="445" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#4cd7f6" text-anchor="middle" letter-spacing="3">OFFLINE CAE STUDIO</text>
+</svg>

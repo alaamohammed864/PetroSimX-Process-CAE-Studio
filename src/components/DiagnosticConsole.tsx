@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { ChemicalComponent, EventLogEntry, ProcessStream, UnitSystem } from '../types/simulation';
+import React, { useState, useMemo } from 'react';
+import { ChemicalComponent, EventLogEntry, ProcessStream, UnitSystem, EquipmentUnit } from '../types/simulation';
 import { formatFlow, formatPres, formatTemp } from '../engine/thermoEngine';
 import { ConvergenceIterationRecord } from '../engine/solver/recycleSolver';
 import { StructuredEngineeringReport, exportReportToMarkdown } from '../engine/reporting/engineeringReportGenerator';
 import { runEngineeringTestSuite, TestSuiteSummary } from '../engine/tests/engineeringTestSuite';
 import { ProcessValidationReport } from '../engine/validation/processValidator';
+import { SimulationResult } from '../engine/solver/simulationManager';
+import {
+  ReportType,
+  REPORT_TYPES,
+  buildEngineeringReport,
+  exportReportToCSV,
+  exportReportToJSON,
+  triggerFileDownload,
+  getDefaultProjectMetadata,
+  ENGINEERING_DISCLAIMER,
+} from '../engine/reporting/engineeringReportEngine';
 
 interface DiagnosticConsoleProps {
   logs: EventLogEntry[];
@@ -19,7 +30,10 @@ interface DiagnosticConsoleProps {
   isSolving?: boolean;
   engineeringReport?: StructuredEngineeringReport | null;
   validationReport?: ProcessValidationReport | null;
+  simulationResult?: SimulationResult | null;
+  units?: EquipmentUnit[];
   onTriggerSolve?: () => void;
+  onOpenReportsStudio?: () => void;
 }
 
 export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
@@ -35,7 +49,10 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
   isSolving = false,
   engineeringReport = null,
   validationReport = null,
+  simulationResult = null,
+  units = [],
   onTriggerSolve,
+  onOpenReportsStudio,
 }) => {
   const [activeTab, setActiveTab] = useState<
     'solver' | 'convergence' | 'reports' | 'validation' | 'verification' | 'streams' | 'compositions'
@@ -43,6 +60,20 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [testResults, setTestResults] = useState<TestSuiteSummary | null>(() => runEngineeringTestSuite());
   const [copyReportSuccess, setCopyReportSuccess] = useState(false);
+  const [selectedReportType, setSelectedReportType] = useState<ReportType>('simulation');
+
+  const liveReportDoc = useMemo(() => {
+    return buildEngineeringReport(
+      selectedReportType,
+      simulationResult,
+      units,
+      streams,
+      components,
+      unitSystem,
+      getDefaultProjectMetadata(),
+      validationReport
+    );
+  }, [selectedReportType, simulationResult, units, streams, components, unitSystem, validationReport]);
 
   const handleRunTests = () => {
     const res = runEngineeringTestSuite();
@@ -50,12 +81,29 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
   };
 
   const handleCopyMarkdownReport = () => {
-    if (!engineeringReport) return;
-    const md = exportReportToMarkdown(engineeringReport);
-    navigator.clipboard.writeText(md).then(() => {
-      setCopyReportSuccess(true);
-      setTimeout(() => setCopyReportSuccess(false), 2500);
-    });
+    if (engineeringReport) {
+      const md = exportReportToMarkdown(engineeringReport);
+      navigator.clipboard.writeText(md).then(() => {
+        setCopyReportSuccess(true);
+        setTimeout(() => setCopyReportSuccess(false), 2500);
+      });
+    } else {
+      const text = `${liveReportDoc.title}\n${liveReportDoc.executiveSummary}\n\nDisclaimer: ${ENGINEERING_DISCLAIMER}`;
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyReportSuccess(true);
+        setTimeout(() => setCopyReportSuccess(false), 2500);
+      });
+    }
+  };
+
+  const handleConsoleExportCSV = () => {
+    const csv = exportReportToCSV(liveReportDoc);
+    triggerFileDownload(csv, `PetroSimX_${selectedReportType}_Report.csv`, 'text/csv;charset=utf-8;');
+  };
+
+  const handleConsoleExportJSON = () => {
+    const json = exportReportToJSON(liveReportDoc);
+    triggerFileDownload(json, `PetroSimX_${selectedReportType}_Report.json`, 'application/json;charset=utf-8;');
   };
 
   return (
@@ -396,90 +444,144 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
 
           {/* 3. ENGINEERING BALANCES & REPORTS TAB */}
           {activeTab === 'reports' && (
-            <div className="space-y-2 max-h-44 overflow-y-auto">
-              <div className="flex items-center justify-between pb-1 border-b border-[#3d494c]/30">
-                <span className="text-[#dae2fd] font-bold text-[11px]">
-                  RIGOROUS HEAT &amp; MATERIAL BALANCE AUDIT
-                </span>
-                <button
-                  onClick={handleCopyMarkdownReport}
-                  className="px-2.5 py-1 bg-[#1d263b] hover:bg-[#283552] text-[#4cd7f6] rounded text-[10px] font-bold border border-[#4cd7f6]/30 transition-all flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-[13px]">content_copy</span>
-                  <span>{copyReportSuccess ? 'Report Copied!' : 'Copy Markdown Report'}</span>
-                </button>
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {/* Header with Report Selector & Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[#3d494c]/30">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#dae2fd] font-bold text-[11px] font-mono">
+                    ENGINEERING REPORT:
+                  </span>
+                  <select
+                    value={selectedReportType}
+                    onChange={(e) => setSelectedReportType(e.target.value as ReportType)}
+                    className="bg-[#171f33] border border-[#3d494c]/60 text-[#4cd7f6] font-mono text-[10.5px] rounded px-2 py-0.5 focus:outline-none focus:border-[#4cd7f6]"
+                  >
+                    {REPORT_TYPES.map((rep) => (
+                      <option key={rep.id} value={rep.id} className="bg-[#131b2e]">
+                        {rep.title} ({rep.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleCopyMarkdownReport}
+                    className="px-2 py-0.5 bg-[#171f33] hover:bg-[#222a3d] text-[#bcc9cd] hover:text-[#dae2fd] rounded text-[10px] font-mono border border-[#3d494c]/40 transition-all flex items-center gap-1"
+                    title="Copy Summary & Disclaimer"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                    <span>{copyReportSuccess ? 'Copied!' : 'Copy'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleConsoleExportCSV}
+                    className="px-2 py-0.5 bg-[#171f33] hover:bg-[#222a3d] text-[#4edea3] rounded text-[10px] font-mono border border-[#4edea3]/30 transition-all flex items-center gap-1 font-semibold"
+                    title="Export CSV Data Table"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">table_view</span>
+                    <span>CSV</span>
+                  </button>
+
+                  <button
+                    onClick={handleConsoleExportJSON}
+                    className="px-2 py-0.5 bg-[#171f33] hover:bg-[#222a3d] text-[#ffddb8] rounded text-[10px] font-mono border border-[#ffddb8]/30 transition-all flex items-center gap-1 font-semibold"
+                    title="Export JSON Structured Document"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">data_object</span>
+                    <span>JSON</span>
+                  </button>
+
+                  {onOpenReportsStudio && (
+                    <button
+                      onClick={onOpenReportsStudio}
+                      className="px-2.5 py-0.5 bg-[#4cd7f6]/20 hover:bg-[#4cd7f6]/30 text-[#4cd7f6] rounded text-[10px] font-mono font-bold border border-[#4cd7f6] transition-all flex items-center gap-1 shadow-sm"
+                      title="Open Fullscreen Engineering Reports Studio"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                      <span>Full Report Studio &amp; PDF</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 text-[10px]">
-                {/* Mass balance box */}
-                <div className="bg-[#171f33] p-2 rounded border border-[#3d494c]/30 space-y-1">
-                  <span className="text-[#869397] block text-[9px] uppercase">Overall Mass Balance</span>
-                  <div className="flex justify-between text-[#dae2fd]">
-                    <span>Total Feed:</span>
-                    <strong>{engineeringReport ? engineeringReport.globalMassBalance.totalFeedRateKgH.toLocaleString() : '65,000'} kg/h</strong>
+              {/* Disclaimer Notice */}
+              <div className="p-1.5 bg-[#171f33] border-l-2 border-[#ffb95f] rounded-r text-[9.5px] font-mono text-[#dae2fd]/85 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px] text-[#ffb95f] shrink-0">verified</span>
+                <span>{ENGINEERING_DISCLAIMER}</span>
+              </div>
+
+              {/* Report Summary & KPIs */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-[10px]">
+                {/* Executive Summary */}
+                <div className="bg-[#171f33] p-2 rounded border border-[#3d494c]/30 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[#869397] font-mono block text-[9px] uppercase font-bold">
+                      {liveReportDoc.title}
+                    </span>
+                    <p className="text-[10px] text-[#dae2fd] mt-1 line-clamp-3">
+                      {liveReportDoc.executiveSummary}
+                    </p>
                   </div>
-                  <div className="flex justify-between text-[#dae2fd]">
-                    <span>Total Product:</span>
-                    <strong>{engineeringReport ? engineeringReport.globalMassBalance.totalProductRateKgH.toLocaleString() : '65,000'} kg/h</strong>
-                  </div>
-                  <div className="flex justify-between text-[#4edea3] font-bold pt-1 border-t border-[#3d494c]/30">
-                    <span>Discrepancy:</span>
-                    <span>{engineeringReport ? `${engineeringReport.globalMassBalance.massDiscrepancyKgH} kg/h` : '0.000 kg/h'}</span>
+                  <div className="mt-2 pt-1 border-t border-[#3d494c]/30 text-[9px] font-mono text-[#869397] flex justify-between">
+                    <span>Engine: {liveReportDoc.metadata.modelVersion}</span>
+                    <span className="text-[#4edea3]">CONVERGED</span>
                   </div>
                 </div>
 
-                {/* Energy balance box */}
+                {/* KPIs */}
                 <div className="bg-[#171f33] p-2 rounded border border-[#3d494c]/30 space-y-1">
-                  <span className="text-[#869397] block text-[9px] uppercase">Overall Energy Balance</span>
-                  <div className="flex justify-between text-[#dae2fd]">
-                    <span>Feed Enthalpy:</span>
-                    <strong>{engineeringReport ? `${engineeringReport.globalEnergyBalance.inletEnthalpyKW.toFixed(0)} kW` : '1,240 kW'}</strong>
-                  </div>
-                  <div className="flex justify-between text-[#dae2fd]">
-                    <span>Utilities (Q + W):</span>
-                    <strong>{engineeringReport ? `${(engineeringReport.globalEnergyBalance.totalHeatDutySuppliedKW + engineeringReport.globalEnergyBalance.totalMechanicalPowerKW).toFixed(0)} kW` : '3,850 kW'}</strong>
-                  </div>
-                  <div className="flex justify-between text-[#4edea3] font-bold pt-1 border-t border-[#3d494c]/30">
-                    <span>Net Closure:</span>
-                    <span>{engineeringReport ? `${engineeringReport.globalEnergyBalance.percentClosure}%` : '99.998%'}</span>
-                  </div>
+                  <span className="text-[#869397] font-mono block text-[9px] uppercase font-bold">
+                    Key Performance Indicators
+                  </span>
+                  {liveReportDoc.kpis.slice(0, 3).map((kpi, kIdx) => (
+                    <div key={kIdx} className="flex justify-between font-mono text-[9.5px]">
+                      <span className="text-[#bcc9cd]">{kpi.label}:</span>
+                      <strong className="text-[#dae2fd]">{kpi.value} {kpi.unit || ''}</strong>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Unit operations summary */}
+                {/* Primary Data Table Preview */}
                 <div className="col-span-2 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 overflow-x-auto">
-                  <span className="text-[#869397] block text-[9px] uppercase mb-1">Equipment Performance</span>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[#869397] font-mono block text-[9px] uppercase font-bold">
+                      {liveReportDoc.sections[0]?.title || 'Performance Metrics'}
+                    </span>
+                    <span className="text-[9px] font-mono text-[#4cd7f6]">
+                      {liveReportDoc.sections[0]?.tableRows?.length || 0} variables
+                    </span>
+                  </div>
                   <table className="w-full text-left font-mono text-[9.5px]">
                     <thead>
                       <tr className="text-[#869397] border-b border-[#3d494c]/20">
-                        <th className="pb-0.5">Unit</th>
-                        <th className="pb-0.5">Type</th>
-                        <th className="pb-0.5 text-right">Duty [MW]</th>
-                        <th className="pb-0.5 text-right">ΔP [bar]</th>
+                        <th className="pb-0.5">Variable</th>
+                        <th className="pb-0.5 text-right">Value</th>
+                        <th className="pb-0.5 text-right">Unit</th>
                         <th className="pb-0.5 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#3d494c]/20">
-                      {engineeringReport ? (
-                        engineeringReport.equipmentPerformance.map((u) => (
-                          <tr key={u.unitId}>
-                            <td className="py-0.5 font-bold text-[#4cd7f6]">{u.unitId}</td>
-                            <td className="py-0.5 text-[#bcc9cd]">{u.unitType}</td>
-                            <td className="py-0.5 text-right text-[#ffddb8]">
-                              {(u.dutyKW / 1000).toFixed(2)}
-                            </td>
-                            <td className="py-0.5 text-right text-[#dae2fd]">
-                              {u.pressureDropBar.toFixed(2)}
-                            </td>
-                            <td className="py-0.5 text-right text-[#4edea3] font-bold">{u.status}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="text-center py-2 text-[#869397]">
-                            Simulation report ready. Run solver to refresh.
+                      {liveReportDoc.sections[0]?.tableRows?.slice(0, 4).map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          <td className="py-0.5 font-sans text-[#dae2fd] truncate max-w-[140px]">{row.variable}</td>
+                          <td className="py-0.5 text-right font-bold text-[#ffddb8]">{row.value}</td>
+                          <td className="py-0.5 text-right text-[#869397]">{row.unit}</td>
+                          <td className="py-0.5 text-right">
+                            <span className={`px-1 py-0.2 rounded text-[8px] border ${
+                              row.status === 'OPTIMAL' || row.status === 'CONSERVED' || row.status === 'PASS'
+                                ? 'text-[#4edea3] bg-[#005234]/40 border-[#4edea3]/40'
+                                : 'text-[#4cd7f6] bg-[#004e5d]/30 border-[#4cd7f6]/40'
+                            }`}>
+                              {row.status}
+                            </span>
                           </td>
                         </tr>
-                      )}
+                      ))}
                     </tbody>
                   </table>
                 </div>
