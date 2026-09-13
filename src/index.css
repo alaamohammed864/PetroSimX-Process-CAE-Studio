@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-background: #0b1326;
+    --color-surface: #0b1326;
+    --color-surface-dim: #0b1326;
+    --color-surface-bright: #31394d;
+    --color-surface-lowest: #060e20;
+    --color-surface-low: #131b2e;
+    --color-surface-container: #171f33;
+    --color-surface-high: #222a3d;
+    --color-surface-highest: #2d3449;
+    --color-on-surface: #dae2fd;
+    --color-on-surface-variant: #bcc9cd;
+    --color-outline: #869397;
+    --color-outline-variant: #3d494c;
+    --color-primary: #4cd7f6;
+    --color-on-primary: #003640;
+    --color-primary-container: #06b6d4;
+    --color-primary-fixed: #acedff;
+    --color-primary-fixed-dim: #4cd7f6;
+    --color-secondary: #ffb95f;
+    --color-on-secondary: #472a00;
+    --color-secondary-container: #ee9800;
+    --color-secondary-fixed: #ffddb8;
+    --color-secondary-fixed-dim: #ffb95f;
+    --color-tertiary: #4edea3;
+    --color-on-tertiary: #003824;
+    --color-tertiary-container: #1bbd85;
+    --color-error: #ffb4ab;
+    --color-error-container: #93000a;
+  }
+
+  body {
+    background-color: #0b1326;
+    color: #dae2fd;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    user-select: none;
+    overflow-x: hidden;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom scrollbars for high-density engineering panels */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #0b1326;
+}
+::-webkit-scrollbar-thumb {
+  background: #222a3d;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4cd7f6;
+}
