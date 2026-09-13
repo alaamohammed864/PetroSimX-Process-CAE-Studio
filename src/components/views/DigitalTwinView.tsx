@@ -15,22 +15,69 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
 }) => {
   const [telemetryNoise, setTelemetryNoise] = useState(0);
 
-  // Simulate real-time sensor jitter & DCS telemetry
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTelemetryNoise((Math.random() - 0.5) * 0.4);
-    }, 1200);
-    return () => clearInterval(interval);
-  }, []);
+  // Dynamic rolling trend buffer
+  const [history, setHistory] = useState<{ inlet: number; effluent: number }[]>(() => {
+    const initial = [];
+    const baseIn = (streams.find((s) => s.id === 'S-104') || streams[3] || { tempC: 510 }).tempC;
+    const baseOut = (streams.find((s) => s.id === 'S-105') || streams[4] || { tempC: 495 }).tempC;
+    for (let i = 0; i < 25; i++) {
+      initial.push({
+        inlet: baseIn + Math.sin(i * 0.5) * 1.2,
+        effluent: baseOut + Math.cos(i * 0.5) * 1.5,
+      });
+    }
+    return initial;
+  });
 
   const s104 = streams.find((s) => s.id === 'S-104') || streams[3];
   const s105 = streams.find((s) => s.id === 'S-105') || streams[4];
   const s106 = streams.find((s) => s.id === 'S-106') || streams[5];
 
-  const rInletTemp = s104.tempC + telemetryNoise * 2;
-  const rEffluentTemp = s105.tempC - telemetryNoise * 1.5;
-  const rPressure = s104.presBar + telemetryNoise * 0.2;
+  // Simulate real-time sensor jitter & DCS telemetry
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const noise = (Math.random() - 0.5) * 0.4;
+      setTelemetryNoise(noise);
+      setHistory((prev) => {
+        const nextInlet = (s104?.tempC ?? 510) + noise * 2;
+        const nextEffluent = (s105?.tempC ?? 495) - noise * 1.5;
+        const updated = [...prev, { inlet: nextInlet, effluent: nextEffluent }];
+        return updated.slice(-30);
+      });
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [s104?.tempC, s105?.tempC]);
+
+  const rInletTemp = (s104?.tempC ?? 510) + telemetryNoise * 2;
+  const rEffluentTemp = (s105?.tempC ?? 495) - telemetryNoise * 1.5;
+  const rPressure = (s104?.presBar ?? 82.5) + telemetryNoise * 0.2;
   const rDeltaP = Math.max(0.5, 1.86 + telemetryNoise * 0.1);
+
+  // Compute SVG polyline coordinates based on history
+  const chartWidth = 800;
+  const chartHeight = 140;
+  const tMin = 480;
+  const tMax = 530;
+  const getY = (temp: number) => {
+    const normalized = Math.max(0, Math.min(1, (temp - tMin) / (tMax - tMin)));
+    return chartHeight - normalized * (chartHeight - 20) - 10;
+  };
+
+  const inletPath = history
+    .map((pt, idx) => {
+      const x = (idx / Math.max(1, history.length - 1)) * chartWidth;
+      const y = getY(pt.inlet);
+      return `${idx === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  const effluentPath = history
+    .map((pt, idx) => {
+      const x = (idx / Math.max(1, history.length - 1)) * chartWidth;
+      const y = getY(pt.effluent);
+      return `${idx === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
 
   return (
     <div className="p-4 space-y-4 max-w-6xl mx-auto font-mono text-[11px] select-none">
@@ -107,20 +154,24 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
             <line x1="0" y1="70" x2="800" y2="70" stroke="#3d494c" strokeDasharray="3,3" strokeWidth="0.8" />
             <line x1="0" y1="105" x2="800" y2="105" stroke="#3d494c" strokeDasharray="3,3" strokeWidth="0.8" />
 
-            {/* Simulated Live Trend Line 1: Inlet Temp */}
+            {/* Live Dynamic Trend Line 1: Inlet Temp */}
             <path
-              d="M 0 50 Q 150 45, 300 52 T 600 48 T 800 50"
+              d={inletPath}
               fill="none"
               stroke="#ffb95f"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
 
-            {/* Simulated Live Trend Line 2: Effluent Temp */}
+            {/* Live Dynamic Trend Line 2: Effluent Temp */}
             <path
-              d="M 0 95 Q 200 90, 400 98 T 700 92 T 800 95"
+              d={effluentPath}
               fill="none"
               stroke="#4edea3"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
 

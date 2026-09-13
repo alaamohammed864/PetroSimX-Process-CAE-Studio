@@ -61,6 +61,7 @@ import {
 export interface UnitModelResult {
   unitId: string;
   unitType: string;
+  status?: 'CONVERGED' | 'FAILED' | 'NOT_CONVERGED' | 'INVALID_INPUT';
   outletStreams: StreamCalculationResult[];
   dutyKW: number;
   workKW: number;
@@ -397,8 +398,9 @@ export function solveHeatExchanger(
   const deltaTMin = params.minApproachDeltaTC ?? 10.0;
   if (hotInlet.temperatureC <= coldInlet.temperatureC) {
     errors.push(
-      `Temperature crossover at inlet: Hot stream (${hotInlet.temperatureC} °C) is cooler than cold stream (${coldInlet.temperatureC} °C).`
+      `Temperature crossover at inlet: Hot stream (${hotInlet.temperatureC} °C) is cooler than or equal to cold stream (${coldInlet.temperatureC} °C).`
     );
+    return createEmptyResult(unitId, 'HeatExchanger', equations, errors, warnings);
   }
 
   // Maximum possible heat transfer limited by 2nd Law (approach delta T)
@@ -450,6 +452,7 @@ export function solveHeatExchanger(
   return {
     unitId,
     unitType: 'HeatExchanger',
+    status: errors.length > 0 ? 'FAILED' : 'CONVERGED',
     outletStreams: [hotOutlet, coldOutlet],
     dutyKW: actualQ_KW,
     workKW: 0,
@@ -510,6 +513,7 @@ export function solvePump(
 
   if (pOut <= feed.pressureBar) {
     errors.push(`Pump outlet pressure (${pOut} bar) must be strictly higher than inlet (${feed.pressureBar} bar).`);
+    return createEmptyResult(unitId, 'Pump', equations, errors, warnings);
   }
 
   if (feed.vaporFraction > 0.05) {
@@ -603,6 +607,7 @@ export function solveCompressor(
     errors.push(
       `Compressor discharge pressure (${pOut} bar) must exceed suction pressure (${feed.pressureBar} bar).`
     );
+    return createEmptyResult(unitId, 'Compressor', equations, errors, warnings);
   }
 
   if (feed.vaporFraction < 0.95) {
@@ -637,6 +642,7 @@ export function solveCompressor(
   return {
     unitId,
     unitType: 'Compressor',
+    status: errors.length > 0 ? 'FAILED' : 'CONVERGED',
     outletStreams: [outlet],
     dutyKW: 0,
     workKW: actualWorkKW,
@@ -935,6 +941,7 @@ export function solveReactorUnit(
   const modelResult: UnitModelResult = {
     unitId,
     unitType: `Reactor (${defaultSpec.reactorType})`,
+    status: errors.length > 0 || !reactorRes.converged ? 'FAILED' : 'CONVERGED',
     outletStreams: [outlet],
     dutyKW,
     workKW: 0,
@@ -980,6 +987,7 @@ function createEmptyResult(
   return {
     unitId,
     unitType,
+    status: errors.length > 0 ? 'FAILED' : 'CONVERGED',
     outletStreams: [],
     dutyKW: 0,
     workKW: 0,

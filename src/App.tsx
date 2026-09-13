@@ -35,7 +35,7 @@ import { SimulationTaskController } from './engine/worker/simulationWorkerClient
 import { generateStructuredReport, StructuredEngineeringReport } from './engine/reporting/engineeringReportGenerator';
 import { ConvergenceIterationRecord } from './engine/solver/recycleSolver';
 import { ProcessValidationReport } from './engine/validation/processValidator';
-import { SimulationResult } from './engine/solver/simulationManager';
+import { SimulationResult, runSteadyStateSimulation } from './engine/solver/simulationManager';
 import { localDb, ProjectRecord, RecoverySnapshotRecord } from './engine/storage/indexedDbClient';
 import { ProjectManagerModal } from './components/modals/ProjectManagerModal';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
@@ -421,7 +421,7 @@ export default function App() {
           if (!unitRes) return u;
           return {
             ...u,
-            status: unitRes.validationErrors.length === 0 ? 'converged' : 'warning',
+            status: unitRes.validationErrors.length > 0 ? 'failed' : unitRes.validationWarnings.length > 0 ? 'warning' : 'converged',
             equilibrium: {
               ...u.equilibrium,
               dutyMW: parseFloat(((unitRes.dutyKW || 0) / 1000).toFixed(3)),
@@ -442,15 +442,27 @@ export default function App() {
       const report = generateStructuredReport(simResult, units, streams);
       setEngineeringReport(report);
 
-      setLogs((prev) => [
-        ...prev,
-        {
-          id: `log-${Date.now()}-2`,
-          time: new Date().toTimeString().split(' ')[0],
-          type: 'success',
-          message: `Steady-State convergence reached in ${simResult.iterations} iterations (${simResult.totalExecutionTimeMs.toFixed(1)} ms). Global mass balance discrepancy: ${simResult.globalMaterialBalance.massImbalanceKgH.toFixed(4)} kg/h.`,
-        },
-      ]);
+      if (simResult.converged) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `log-${Date.now()}-2`,
+            time: new Date().toTimeString().split(' ')[0],
+            type: 'success',
+            message: `Steady-State convergence reached in ${simResult.iterations} iterations (${simResult.totalExecutionTimeMs.toFixed(1)} ms). Global mass balance discrepancy: ${simResult.globalMaterialBalance.massImbalanceKgH.toFixed(4)} kg/h.`,
+          },
+        ]);
+      } else {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `log-${Date.now()}-failed`,
+            time: new Date().toTimeString().split(' ')[0],
+            type: 'warn',
+            message: `Simulation ${simResult.errors.length > 0 ? 'FAILED' : 'DID NOT CONVERGE'}: ${simResult.statusMessage}`,
+          },
+        ]);
+      }
     } catch (err: any) {
       setLogs((prev) => [
         ...prev,
@@ -480,18 +492,67 @@ export default function App() {
     ]);
   }, []);
 
-  const handleStep = useCallback(() => {
-    const timeStr = new Date().toTimeString().split(' ')[0];
-    setLogs((prev) => [
-      ...prev,
-      {
-        id: `log-${Date.now()}`,
-        time: timeStr,
-        type: 'info',
-        message: 'Solver single-step executed: Updated unit R-101 Jacobian.',
-      },
-    ]);
-  }, []);
+  const handleStep = useCallback(async () => {
+    try {
+      const stepResult = await runSteadyStateSimulation(units, streams, components, {
+        solverOptions: { tolerance: 1e-5, maxIterations: 1, method: 'Direct' },
+      });
+      setStreams((prev) =>
+        prev.map((s) => {
+          const calc = stepResult.calculatedStreams.get(s.id);
+          if (!calc) return s;
+          return {
+            ...s,
+            tempC: parseFloat(calc.temperatureC.toFixed(2)),
+            presBar: parseFloat(calc.pressureBar.toFixed(2)),
+            flowKgH: parseFloat(calc.totalMassFlowKgH.toFixed(1)),
+            mw: parseFloat(calc.mwAvg.toFixed(2)),
+            phase: calc.phase as any,
+            vaporFraction: parseFloat(calc.vaporFraction.toFixed(3)),
+            enthalpyKjKg: parseFloat(calc.enthalpyKjKg.toFixed(1)),
+            densityKgM3: parseFloat(calc.densityKgM3.toFixed(1)),
+            compositions: { ...calc.moleFractions },
+          };
+        })
+      );
+      setUnits((prev) =>
+        prev.map((u) => {
+          const unitRes = stepResult.unitResults.get(u.id);
+          if (!unitRes) return u;
+          return {
+            ...u,
+            status: unitRes.validationErrors.length > 0 ? 'failed' : unitRes.validationWarnings.length > 0 ? 'warning' : 'converged',
+            equilibrium: {
+              ...u.equilibrium,
+              dutyMW: parseFloat(((unitRes.dutyKW || 0) / 1000).toFixed(3)),
+              pressureDropBar: parseFloat((unitRes.pressureDropBar || 0).toFixed(2)),
+            },
+          };
+        })
+      );
+      setSimulationResult(stepResult);
+      const timeStr = new Date().toTimeString().split(' ')[0];
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}`,
+          time: timeStr,
+          type: 'info',
+          message: `Single solver step executed: Evaluated ${stepResult.executionOrder.length} unit(s). Max residual: ${stepResult.convergenceHistory[0]?.maxResidual?.toExponential(3) || '0.000e+0'}.`,
+        },
+      ]);
+    } catch (err: any) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}-step-err`,
+          time: new Date().toTimeString().split(' ')[0],
+          type: 'warn',
+          message: `Single step calculation error: ${err?.message || 'Numerical exception'}`,
+        },
+      ]);
+    }
+  }, [units, streams, components]);
 
   const handleClearDiagnostics = useCallback(() => {
     setLogs([]);

@@ -161,9 +161,13 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         <div className="flex items-center gap-2 text-[#869397] font-mono text-[10px]">
-          <span>MEM: 1.48 GB</span>
+          <span>
+            {typeof performance !== 'undefined' && (performance as any).memory
+              ? `HEAP: ${Math.round((performance as any).memory.usedJSHeapSize / (1024 * 1024))} MB`
+              : 'HEAP: OPTIMAL'}
+          </span>
           <span>|</span>
-          <span>THREADS: 16/16</span>
+          <span>THREADS: {typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8}</span>
         </div>
       </div>
 

@@ -200,8 +200,10 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
             }`}
             type="button"
           >
-            <span>Verification Tests (10)</span>
-            <span className="px-1 py-0.2 rounded bg-[#005234] text-[#4edea3] text-[8.5px] font-bold">PASS</span>
+            <span>Verification Tests ({testResults ? testResults.total : 16})</span>
+            <span className="px-1 py-0.2 rounded bg-[#005234] text-[#4edea3] text-[8.5px] font-bold">
+              {testResults && testResults.failed > 0 ? `${testResults.failed} FAIL` : 'PASS'}
+            </span>
           </button>
 
           <button

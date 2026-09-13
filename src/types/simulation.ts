@@ -21,7 +21,7 @@ export type UnitType =
   | 'valve' 
   | 'compressor';
 
-export type UnitStatus = 'converged' | 'solved' | 'calculating' | 'diverged' | 'unsolved';
+export type UnitStatus = 'converged' | 'solved' | 'calculating' | 'diverged' | 'unsolved' | 'failed' | 'warning';
 
 export interface EquipmentGeometry {
   catalystVolumeM3: number;

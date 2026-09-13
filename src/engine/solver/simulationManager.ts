@@ -621,8 +621,23 @@ export async function runSteadyStateSimulation(
     ...validationReport.errors.map((e) => `[${e.category.toUpperCase()}] ${e.message}`),
   ];
 
+  // Propagate all unit validation errors
+  for (const [uid, ures] of unitResults) {
+    if (ures.validationErrors && ures.validationErrors.length > 0) {
+      for (const err of ures.validationErrors) {
+        combinedErrors.push(`[${uid}] ${err}`);
+      }
+    }
+  }
+
+  // Strict physical convergence condition:
+  // Must have 0 fatal errors, and if tear streams exist, tear residual must be below tolerance
+  const isTrulyConverged =
+    combinedErrors.length === 0 &&
+    (tearStreamIds.length === 0 ? true : converged);
+
   return {
-    converged: converged || currentIteration <= solverOpts.maxIterations,
+    converged: isTrulyConverged,
     iterations: Math.min(currentIteration, solverOpts.maxIterations),
     totalExecutionTimeMs,
     tearStreams: tearStreamIds,
@@ -649,8 +664,10 @@ export async function runSteadyStateSimulation(
     },
     warnings: combinedWarnings,
     errors: combinedErrors,
-    statusMessage: converged
-      ? `Sequential Modular Solver converged in ${currentIteration} iterations. Wegstein acceleration active.`
-      : `Solver finished with max residual ${lastMaxResidual.toExponential(3)}.`,
+    statusMessage: isTrulyConverged
+      ? `Sequential Modular Solver converged in ${Math.min(currentIteration, solverOpts.maxIterations)} iteration(s). Material and energy balances solved.`
+      : combinedErrors.length > 0
+      ? `Simulation halted with ${combinedErrors.length} error(s): ${combinedErrors[0]}`
+      : `Solver did NOT converge within ${solverOpts.maxIterations} iterations (max residual: ${lastMaxResidual.toExponential(3)} > tol ${solverOpts.tolerance}).`,
   };
 }
