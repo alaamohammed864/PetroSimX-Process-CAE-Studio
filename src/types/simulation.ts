@@ -129,4 +129,13 @@ export interface EventLogEntry {
 }
 
 export type UnitSystem = 'SI' | 'Field' | 'Metric';
-export type ViewTab = 'flowsheet-canvas' | 'column-design' | 'thermodynamics-engine' | 'reactor-engineering' | 'sensitivity-optimization' | 'stream-matrix' | 'digital-twin-monitor';
+export type ViewTab = 
+  | 'flowsheet-canvas' 
+  | '3d-plant-view'
+  | 'column-design' 
+  | 'thermodynamics-engine' 
+  | 'reactor-engineering' 
+  | 'sensitivity-optimization' 
+  | 'energy-utilities'
+  | 'stream-matrix' 
+  | 'digital-twin-monitor';

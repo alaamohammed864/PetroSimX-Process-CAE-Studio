@@ -119,10 +119,12 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="flex items-center gap-0.5">
           {[
             { id: 'flowsheet-canvas', label: 'Flowsheet' },
+            { id: '3d-plant-view', label: '3D Plant' },
             { id: 'column-design', label: 'Column Design' },
             { id: 'thermodynamics-engine', label: 'Thermodynamics' },
             { id: 'reactor-engineering', label: 'Reactors' },
             { id: 'sensitivity-optimization', label: 'Optimization' },
+            { id: 'energy-utilities', label: 'Energy & Emissions' },
             { id: 'stream-matrix', label: 'Matrix Sheets' },
             { id: 'digital-twin-monitor', label: 'Digital Twin' },
           ].map((tab) => {
@@ -261,6 +263,22 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <span className="material-symbols-outlined text-[15px] text-[#ffddb8]">view_column</span>
           <span>Column</span>
+        </button>
+
+        <div className="h-4 w-px bg-[#3d494c]/40 mx-1" />
+
+        <button
+          onClick={() => onTabChange(currentTab === '3d-plant-view' ? 'flowsheet-canvas' : '3d-plant-view')}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10.5px] font-semibold transition-all ${
+            currentTab === '3d-plant-view'
+              ? 'bg-[#4cd7f6]/30 text-[#4cd7f6] border border-[#4cd7f6]'
+              : 'hover:bg-[#171f33] text-[#4cd7f6] border border-[#4cd7f6]/40'
+          }`}
+          title="Switch to 3D Process Plant CAE Visualizer"
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[15px]">view_in_ar</span>
+          <span>3D PLANT</span>
         </button>
 
         <div className="h-4 w-px bg-[#3d494c]/40 mx-1" />

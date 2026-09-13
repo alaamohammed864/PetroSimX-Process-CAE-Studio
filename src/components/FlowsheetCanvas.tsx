@@ -12,6 +12,7 @@ interface FlowsheetCanvasProps {
   unitSystem: UnitSystem;
   snapEnabled: boolean;
   onUpdateUnitPosition: (id: string, x: number, y: number) => void;
+  onOpen3DView?: () => void;
 }
 
 export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
@@ -24,6 +25,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   unitSystem,
   snapEnabled,
   onUpdateUnitPosition,
+  onOpen3DView,
 }) => {
   const [zoom, setZoom] = useState(1.0);
   const [showFlags, setShowFlags] = useState(true);
@@ -162,6 +164,18 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             <span className="material-symbols-outlined text-[15px]">thermostat</span>
             <span>GRADIENT</span>
           </button>
+
+          {onOpen3DView && (
+            <button
+              onClick={onOpen3DView}
+              className="px-2 py-1 rounded flex items-center gap-1 font-mono text-[10px] bg-[#4cd7f6]/20 text-[#4cd7f6] hover:bg-[#4cd7f6]/30 border border-[#4cd7f6]/40 transition-colors"
+              title="Launch 3D Process Plant CAE Visualization"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[15px]">view_in_ar</span>
+              <span>3D PLANT</span>
+            </button>
+          )}
 
           <div className="w-px h-4 bg-[#3d494c]/40 mx-1"></div>
 

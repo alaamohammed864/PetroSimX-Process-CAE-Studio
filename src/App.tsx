@@ -27,6 +27,9 @@ import { MatrixSheetsView } from './components/views/MatrixSheetsView';
 import { DigitalTwinView } from './components/views/DigitalTwinView';
 import { OptimizationView } from './components/views/OptimizationView';
 import { ColumnDesignView } from './components/views/ColumnDesignView';
+import { EnergyUtilitiesView } from './components/views/EnergyUtilitiesView';
+import { Plant3DViewer } from './components/plant3d/Plant3DViewer';
+import { DecisionVariable, ProcessCase } from './types/optimization';
 import { SimulationTaskController } from './engine/worker/simulationWorkerClient';
 import { generateStructuredReport, StructuredEngineeringReport } from './engine/reporting/engineeringReportGenerator';
 import { ConvergenceIterationRecord } from './engine/solver/recycleSolver';
@@ -436,6 +439,68 @@ export default function App() {
     setLogs([]);
   }, []);
 
+  const handleApplyOptimalVariables = useCallback((variables: DecisionVariable[]) => {
+    setUnits((prev) => {
+      const updated = JSON.parse(JSON.stringify(prev)) as EquipmentUnit[];
+      variables.forEach((v) => {
+        if (v.targetType === 'unit') {
+          const u = updated.find((item) => item.id === v.targetId);
+          if (u) {
+            if (!u.equilibrium) {
+              u.equilibrium = { inletTempC: 510, outletTempC: 495, operatingPresBar: 28, pressureDropBar: 1.5 };
+            }
+            if (v.propertyKey === 'equilibrium.inletTempC') u.equilibrium.inletTempC = v.currentValue;
+            if (v.propertyKey === 'equilibrium.operatingPresBar') u.equilibrium.operatingPresBar = v.currentValue;
+            if (v.propertyKey === 'equilibrium.h2hcTreatRatioNm3M3') u.equilibrium.h2hcTreatRatioNm3M3 = v.currentValue;
+            if (v.propertyKey === 'equilibrium.dutyMW') u.equilibrium.dutyMW = v.currentValue;
+            if (v.propertyKey === 'equilibrium.lhsvSpaceVelH1') u.equilibrium.lhsvSpaceVelH1 = v.currentValue;
+            if (v.propertyKey === 'columnSpec.refluxRatio' && u.columnSpec) u.columnSpec.refluxRatio = v.currentValue;
+          }
+        }
+      });
+      return updated;
+    });
+
+    setStreams((prev) => {
+      const updated = JSON.parse(JSON.stringify(prev)) as ProcessStream[];
+      variables.forEach((v) => {
+        if (v.targetType === 'stream') {
+          const s = updated.find((item) => item.id === v.targetId);
+          if (s) {
+            if (v.propertyKey === 'flowKgH') s.flowKgH = v.currentValue;
+            if (v.propertyKey === 'tempC') s.tempC = v.currentValue;
+            if (v.propertyKey === 'presBar') s.presBar = v.currentValue;
+          }
+        }
+      });
+      return updated;
+    });
+
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `log-${Date.now()}-opt`,
+        time: new Date().toTimeString().split(' ')[0],
+        type: 'info',
+        message: `Optimal decision variables applied to flowsheet. Process model updated.`,
+      },
+    ]);
+  }, []);
+
+  const handleApplyCaseToFlowsheet = useCallback((caseItem: ProcessCase) => {
+    setUnits(JSON.parse(JSON.stringify(caseItem.units)));
+    setStreams(JSON.parse(JSON.stringify(caseItem.streams)));
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `log-${Date.now()}-case`,
+        time: new Date().toTimeString().split(' ')[0],
+        type: 'info',
+        message: `Loaded scenario "${caseItem.name}" onto active canvas.`,
+      },
+    ]);
+  }, []);
+
   const handleNewProject = useCallback(() => {
     if (window.confirm('Create new flowsheet project? Unsaved changes will be cleared.')) {
       setUnits(INITIAL_UNITS);
@@ -542,6 +607,7 @@ export default function App() {
               unitSystem={unitSystem}
               snapEnabled={snapEnabled}
               onUpdateUnitPosition={handleUpdateUnitPosition}
+              onOpen3DView={() => setCurrentTab('3d-plant-view')}
             />
 
             {/* Right Property Inspector: Detailed specifications & kinetics */}
@@ -554,6 +620,32 @@ export default function App() {
               onOpenSensitivityCurves={() => setIsSensitivityOpen(true)}
               onExportMatrix={handleExportMatrix}
               isIntegrating={isIntegrating}
+            />
+          </div>
+        )}
+
+        {currentTab === '3d-plant-view' && (
+          <div className="flex-1 overflow-hidden bg-[#060e20] flex flex-col relative">
+            <Plant3DViewer
+              units={units}
+              streams={streams}
+              selectedUnitId={selectedUnitId}
+              selectedStreamId={selectedStreamId}
+              onSelectUnit={(id) => {
+                setSelectedUnitId(id);
+                setSelectedStreamId(null);
+              }}
+              onSelectStream={(id) => {
+                setSelectedStreamId(id);
+                if (id) {
+                  const s = streams.find((item) => item.id === id);
+                  if (s) {
+                    const src = units.find((u) => u.outletStreamIds.includes(id));
+                    if (src) setSelectedUnitId(src.id);
+                  }
+                }
+              }}
+              unitSystem={unitSystem}
             />
           </div>
         )}
@@ -614,7 +706,23 @@ export default function App() {
             <OptimizationView
               units={units}
               streams={streams}
+              components={components}
               unitSystem={unitSystem}
+              onApplyOptimalValuesToFlowsheet={handleApplyOptimalVariables}
+              onApplyCaseToFlowsheet={handleApplyCaseToFlowsheet}
+            />
+          </div>
+        )}
+
+        {currentTab === 'energy-utilities' && (
+          <div className="flex-1 overflow-y-auto bg-[#060e20]">
+            <EnergyUtilitiesView
+              units={units}
+              streams={streams}
+              onSelectUnit={(id) => {
+                setSelectedUnitId(id);
+                setCurrentTab('flowsheet-canvas');
+              }}
             />
           </div>
         )}
