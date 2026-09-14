@@ -59,7 +59,36 @@ export const EngineeringReportsView: React.FC<EngineeringReportsViewProps> = ({
 
   // Actions
   const handlePrintPDF = () => {
-    window.print();
+    try {
+      window.print();
+    } catch (e) {
+      console.warn('Standard window.print() was intercepted or restricted by container frame:', e);
+      // Fallback for sandboxed or restricted iframe preview contexts
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const reportEl = document.querySelector('.printable-report-container');
+        if (reportEl) {
+          printWindow.document.write(`<!DOCTYPE html>
+            <html>
+              <head>
+                <title>${currentReport.title}</title>
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #111827; }
+                  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+                  th, td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: left; font-size: 10pt; }
+                  th { background-color: #f3f4f6; font-weight: bold; }
+                </style>
+              </head>
+              <body>
+                ${reportEl.outerHTML}
+              </body>
+            </html>`);
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+        }
+      }
+    }
   };
 
   const handleExportCSV = () => {

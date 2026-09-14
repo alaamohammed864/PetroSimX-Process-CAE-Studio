@@ -9,7 +9,9 @@
  */
 
 import { StreamCalculationResult } from '../stream/streamCalculator';
-import { EquipmentUnit } from '../../types/simulation';
+import { EquipmentUnit, ProcessStream } from '../../types/simulation';
+import { UnitModelResult } from '../models/equipmentModels';
+import { PURE_COMPONENTS_DB } from '../thermo/thermoConstants';
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
@@ -18,7 +20,16 @@ export interface ProcessValidationIssue {
   sourceType: 'unit' | 'stream' | 'flowsheet';
   sourceId: string;
   severity: ValidationSeverity;
-  category: 'pressure' | 'temperature' | 'flow' | 'phase' | 'balance' | 'equipment_spec';
+  category:
+    | 'pressure'
+    | 'temperature'
+    | 'flow'
+    | 'phase'
+    | 'balance'
+    | 'equipment_spec'
+    | 'connectivity'
+    | 'thermodynamics'
+    | 'degrees_of_freedom';
   title: string;
   message: string;
   remedyRecommendation: string;
@@ -37,6 +48,19 @@ export interface FlowsheetValidationReport {
 
 export type ProcessValidationReport = FlowsheetValidationReport;
 export type ValidationReport = FlowsheetValidationReport;
+
+export type StreamSource =
+  | ProcessStream[]
+  | Map<string, StreamCalculationResult>
+  | Record<string, StreamCalculationResult>;
+
+export type StreamResultMap =
+  | Map<string, StreamCalculationResult>
+  | Record<string, StreamCalculationResult>;
+
+export type UnitResultMap =
+  | Map<string, UnitModelResult>
+  | Record<string, UnitModelResult>;
 
 /**
  * Validates an individual process stream
@@ -295,30 +319,233 @@ export function validateEquipmentUnit(
 }
 
 /**
- * Validates entire flowsheet
+ * Rigorously validates entire flowsheet across:
+ * 1. Connectivity Topology (Dangling ports, unconnected streams, closed isolated loops)
+ * 2. Degrees of Freedom (DOF: fully specified feeds, unit specifications)
+ * 3. Thermodynamic Package Consistency (valid components in PR-EOS database, physical operating envelope)
+ * 4. Component Mass & Molar Closures (overall flowsheet balance)
+ * 5. Unit-by-Unit and Stream-by-Stream Physical & Second-Law Constraints
  */
 export function validateFlowsheet(
   units: EquipmentUnit[],
-  arg2: any,
-  arg3?: any,
-  _arg4?: any
+  arg2?: StreamSource,
+  arg3?: StreamResultMap,
+  _arg4?: UnitResultMap
 ): FlowsheetValidationReport {
   const issues: ProcessValidationIssue[] = [];
 
-  // Support signatures:
-  // validateFlowsheet(units, streamResults)
-  // validateFlowsheet(units, streams, streamMap, unitResults)
+  let rawStreams: ProcessStream[] = [];
   let streamMap: Record<string, StreamCalculationResult> = {};
+
+  if (Array.isArray(arg2)) {
+    rawStreams = arg2;
+  }
+
   const mapSource = arg3 !== undefined ? arg3 : arg2;
   if (mapSource instanceof Map) {
     mapSource.forEach((val, key) => {
       streamMap[key] = val;
     });
-  } else if (mapSource && typeof mapSource === 'object') {
+  } else if (mapSource && typeof mapSource === 'object' && !Array.isArray(mapSource)) {
     streamMap = mapSource as Record<string, StreamCalculationResult>;
   }
 
-  // 1. Validate all streams
+  // A. Connectivity & Topology Checks
+  if (units.length === 0) {
+    issues.push({
+      id: 'FS_NO_UNITS',
+      sourceType: 'flowsheet',
+      sourceId: 'flowsheet',
+      severity: 'error',
+      category: 'connectivity',
+      title: 'Empty Flowsheet: No Unit Operations',
+      message: 'The flowsheet topology does not contain any active unit operations.',
+      remedyRecommendation: 'Place unit operations from the equipment palette onto the flowsheet.',
+    });
+  }
+
+  // Build connection maps
+  const unitInletMap = new Map<string, string[]>();
+  const unitOutletMap = new Map<string, string[]>();
+  const streamSourceMap = new Map<string, string>();
+  const streamDestMap = new Map<string, string>();
+
+  for (const unit of units) {
+    const inlets = unit.inletStreamIds || [];
+    const outlets = unit.outletStreamIds || [];
+    unitInletMap.set(unit.id, inlets);
+    unitOutletMap.set(unit.id, outlets);
+
+    for (const inId of inlets) streamDestMap.set(inId, unit.id);
+    for (const outId of outlets) streamSourceMap.set(outId, unit.id);
+
+    // Units that strictly require at least one inlet
+    const requiresInlet = ['compressor', 'pump', 'valve', 'heatex', 'reactor', 'flash', 'column', 'cooler', 'heater'];
+    if (requiresInlet.includes(unit.type) && inlets.length === 0) {
+      issues.push({
+        id: `${unit.id}_NO_INLET`,
+        sourceType: 'unit',
+        sourceId: unit.id,
+        severity: 'error',
+        category: 'connectivity',
+        title: `Unconnected Inlet on ${unit.name || unit.id}`,
+        message: `Unit operation '${unit.name}' (${unit.type}) requires at least one inlet feed stream.`,
+        remedyRecommendation: 'Connect an upstream process stream to this unit inlet port.',
+      });
+    }
+
+    // Units that strictly require at least one outlet
+    if (requiresInlet.includes(unit.type) && outlets.length === 0) {
+      issues.push({
+        id: `${unit.id}_NO_OUTLET`,
+        sourceType: 'unit',
+        sourceId: unit.id,
+        severity: 'warning',
+        category: 'connectivity',
+        title: `Dead-End Unit: No Outlets on ${unit.name || unit.id}`,
+        message: `Unit operation '${unit.name}' (${unit.type}) has no outlet streams defined.`,
+        remedyRecommendation: 'Connect downstream process streams to export product effluents.',
+      });
+    }
+  }
+
+  // Check streams for connectivity
+  for (const s of rawStreams) {
+    const hasSource = streamSourceMap.has(s.id);
+    const hasDest = streamDestMap.has(s.id);
+
+    if (!hasSource && !hasDest) {
+      issues.push({
+        id: `${s.id}_DANGLING`,
+        sourceType: 'stream',
+        sourceId: s.id,
+        severity: 'warning',
+        category: 'connectivity',
+        title: `Isolated Dangling Stream ${s.tag || s.id}`,
+        message: `Stream '${s.name || s.id}' is completely disconnected from all unit operations.`,
+        remedyRecommendation: 'Connect stream to a unit inlet or outlet, or remove it from the flowsheet.',
+      });
+    }
+
+    // Direct circular loop (source equals destination)
+    if (hasSource && hasDest && streamSourceMap.get(s.id) === streamDestMap.get(s.id)) {
+      issues.push({
+        id: `${s.id}_CIRCULAR_SELF_LOOP`,
+        sourceType: 'stream',
+        sourceId: s.id,
+        severity: 'error',
+        category: 'connectivity',
+        title: `Direct Self-Loop on Stream ${s.tag || s.id}`,
+        message: `Stream '${s.name || s.id}' has the same source and destination unit (${streamSourceMap.get(s.id)}).`,
+        remedyRecommendation: 'Route recycle stream through an intervening unit or remove self-connection.',
+      });
+    }
+  }
+
+  // B. Degrees of Freedom (DOF) Checks
+  for (const s of rawStreams) {
+    const isExternalFeed = !streamSourceMap.has(s.id) && streamDestMap.has(s.id);
+    if (isExternalFeed) {
+      if (s.tempC === undefined || isNaN(s.tempC)) {
+        issues.push({
+          id: `${s.id}_DOF_TEMP_UNSPECIFIED`,
+          sourceType: 'stream',
+          sourceId: s.id,
+          severity: 'error',
+          category: 'degrees_of_freedom',
+          title: `Feed Stream Temperature Underspecified (${s.tag || s.id})`,
+          message: `External feed '${s.name || s.id}' requires a specified temperature to satisfy Gibbs phase rule.`,
+          remedyRecommendation: 'Specify process feed temperature in the property inspector.',
+        });
+      }
+      if (s.presBar === undefined || s.presBar <= 0) {
+        issues.push({
+          id: `${s.id}_DOF_PRES_UNSPECIFIED`,
+          sourceType: 'stream',
+          sourceId: s.id,
+          severity: 'error',
+          category: 'degrees_of_freedom',
+          title: `Feed Stream Pressure Underspecified (${s.tag || s.id})`,
+          message: `External feed '${s.name || s.id}' requires a positive operating pressure.`,
+          remedyRecommendation: 'Specify positive feed pressure (e.g. 1.013 bar abs or pipeline supply pressure).',
+        });
+      }
+      if (s.flowKgH === undefined || s.flowKgH <= 0) {
+        issues.push({
+          id: `${s.id}_DOF_FLOW_UNSPECIFIED`,
+          sourceType: 'stream',
+          sourceId: s.id,
+          severity: 'error',
+          category: 'degrees_of_freedom',
+          title: `Zero or Undefined Feed Flow (${s.tag || s.id})`,
+          message: `External feed '${s.name || s.id}' must have a positive mass or molar flow rate.`,
+          remedyRecommendation: 'Specify non-zero throughput rate for process feed.',
+        });
+      }
+
+      // Check sum of mole fractions
+      let sumZ = 0;
+      for (const compId in s.compositions) {
+        sumZ += Math.max(0, s.compositions[compId] || 0);
+      }
+      if (sumZ <= 1e-4) {
+        issues.push({
+          id: `${s.id}_DOF_COMPOSITION_EMPTY`,
+          sourceType: 'stream',
+          sourceId: s.id,
+          severity: 'error',
+          category: 'degrees_of_freedom',
+          title: `Empty Chemical Composition on Feed (${s.tag || s.id})`,
+          message: `External feed '${s.name || s.id}' has zero or undefined chemical component fractions.`,
+          remedyRecommendation: 'Define component mole fractions totaling 1.0 in the stream inspector.',
+        });
+      } else if (Math.abs(sumZ - 1.0) > 0.05) {
+        issues.push({
+          id: `${s.id}_DOF_COMPOSITION_NOT_NORMALIZED`,
+          sourceType: 'stream',
+          sourceId: s.id,
+          severity: 'warning',
+          category: 'degrees_of_freedom',
+          title: `Feed Composition Sum Deviation (${(sumZ * 100).toFixed(1)}%)`,
+          message: `Mole fractions sum for feed stream '${s.name || s.id}' is not 100%.`,
+          remedyRecommendation: 'Normalize mole fractions to ensure exact material balance closure.',
+        });
+      }
+    }
+  }
+
+  // C. Thermodynamic Package Consistency
+  const unlistedComponents = new Set<string>();
+  const checkComponentIds = (compObj: Record<string, number> | undefined) => {
+    if (!compObj) return;
+    for (const compId of Object.keys(compObj)) {
+      if (!PURE_COMPONENTS_DB[compId]) {
+        unlistedComponents.add(compId);
+      }
+    }
+  };
+
+  for (const s of rawStreams) {
+    checkComponentIds(s.compositions);
+  }
+  for (const sId in streamMap) {
+    checkComponentIds(streamMap[sId]?.moleFractions);
+  }
+
+  if (unlistedComponents.size > 0) {
+    issues.push({
+      id: 'FS_THERMO_UNLISTED_COMPONENTS',
+      sourceType: 'flowsheet',
+      sourceId: 'flowsheet',
+      severity: 'warning',
+      category: 'thermodynamics',
+      title: 'Components Missing Peng-Robinson Constants',
+      message: `The following components lack critical properties in the database: ${Array.from(unlistedComponents).join(', ')}. Default physical estimates will be applied.`,
+      remedyRecommendation: 'Register pure components with critical temperature, critical pressure, and acentric factor.',
+    });
+  }
+
+  // D. Validate Individual Streams from StreamMap
   for (const sId in streamMap) {
     const stream = streamMap[sId];
     if (stream) {
@@ -326,7 +553,7 @@ export function validateFlowsheet(
     }
   }
 
-  // 2. Validate all units
+  // E. Validate Individual Equipment Units
   for (const unit of units) {
     const inletIds = unit.inletStreamIds || [];
     const outletIds = unit.outletStreamIds || [];

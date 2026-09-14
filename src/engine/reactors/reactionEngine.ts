@@ -58,6 +58,52 @@ export function calculateEquilibriumConstant(
 }
 
 /**
+ * Computes the Weisz-Prater / Thiele Modulus (phi) and internal catalyst effectiveness factor (eta)
+ * for spherical or pellet catalyst particles:
+ *   phi = (dp / 6) * sqrt(k * rho_p / D_eff)
+ *   eta = (3 / phi) * [ (1 / tanh(phi)) - (1 / phi) ]
+ *
+ * References:
+ *   - Fogler, Elements of Chemical Reaction Engineering (5th Ed.), Chapter 14: Diffusion and Reaction.
+ *   - Technical Report Section 4.2.
+ */
+export function calculateThieleModulusAndEffectiveness(
+  dpMeters: number,
+  kRateConstant: number,
+  rhoPelletKgM3: number,
+  effectiveDiffusivityM2S: number = 2.5e-8
+): { thieleModulusPhi: number; effectivenessFactorEta: number } {
+  // Characteristic length for sphere: L_c = R/3 = d_p / 6
+  const characteristicLength = Math.max(1e-6, dpMeters / 6.0);
+  const Deff = Math.max(1e-12, effectiveDiffusivityM2S);
+  const kEff = Math.max(1e-9, Math.abs(kRateConstant));
+  const rhoP = Math.max(10.0, rhoPelletKgM3);
+
+  const phi = characteristicLength * Math.sqrt((kEff * rhoP) / Deff);
+
+  let eta = 1.0;
+  if (phi < 1e-4) {
+    // Limit as phi -> 0 (Taylor expansion: 1 - phi^2 / 15)
+    eta = 1.0 - (phi * phi) / 15.0;
+  } else if (phi > 35.0) {
+    // Asymptotic strong diffusion resistance limit: eta -> 3 / phi
+    eta = 3.0 / phi;
+  } else {
+    // Rigorous analytical solution for spherical pellet
+    const tanhPhi = Math.tanh(phi);
+    eta = (3.0 / phi) * ((1.0 / tanhPhi) - (1.0 / phi));
+  }
+
+  // Physical bounds: 0 < eta <= 1.0
+  const clampedEta = Math.max(0.01, Math.min(1.0, eta));
+
+  return {
+    thieleModulusPhi: phi,
+    effectivenessFactorEta: clampedEta,
+  };
+}
+
+/**
  * Evaluates net reaction rates for a given reaction given component concentrations (kmol/m³)
  */
 export function evaluateReactionRate(

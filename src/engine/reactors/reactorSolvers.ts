@@ -20,6 +20,7 @@ import {
   calculateSpeciesGenerationRates,
   calculateReactorPerformanceMetrics,
   calculateEquilibriumConstant,
+  calculateThieleModulusAndEffectiveness,
   UNIVERSAL_GAS_CONSTANT_R,
 } from './reactionEngine';
 import { StreamCalculationResult } from '../stream/streamCalculator';
@@ -279,15 +280,22 @@ export function solvePFR(
   const profileConc: Record<string, number[]> = {};
   const profileFlows: Record<string, number[]> = {};
 
+  // Collect all involved chemical species across feed, reactants, and products
+  const allCompIds = new Set<string>(Object.keys(feed.molarFlowsKmolH));
+  for (const rxn of spec.reactions) {
+    for (const r of rxn.reactants) allCompIds.add(r.componentId);
+    for (const p of rxn.products) allCompIds.add(p.componentId);
+  }
+
   for (const rxn of spec.reactions) profileRates[rxn.id] = [];
-  for (const compId in feed.molarFlowsKmolH) {
+  for (const compId of allCompIds) {
     profileConc[compId] = [];
     profileFlows[compId] = [];
   }
 
-  // Initial state vector at reactor inlet z = 0
+  // Initial state vector at reactor inlet z = 0 (ensures full stoichiometric closure for all species)
   let currentFlowsKmolS: Record<string, number> = {};
-  for (const compId in feed.molarFlowsKmolH) {
+  for (const compId of allCompIds) {
     currentFlowsKmolS[compId] = (feed.molarFlowsKmolH[compId] || 0) / 3600.0;
   }
   let currentTK = spec.operatingTemperatureC + 273.15;
@@ -302,6 +310,13 @@ export function solvePFR(
   const initialLimitingFlowKmolS = currentFlowsKmolS[limitingId] || 1e-5;
 
   let totalHeatGenKW = 0;
+
+  // Catalyst pellet and bed physical properties
+  const dpM = (spec.catalystPelletDiameterMm || 2.5) / 1000.0;
+  const voidage = spec.catalystBedVoidage || 0.40;
+  const bulkDensityKgM3 = spec.catalystBulkDensityKgM3 || 850.0;
+  const pelletDensityKgM3 = bulkDensityKgM3 / Math.max(0.1, 1.0 - voidage);
+  const nominalRxn = spec.reactions[0];
 
   // RK4 Integration Loop along Reactor Volume
   for (let step = 0; step <= numSteps; step++) {
@@ -326,8 +341,18 @@ export function solvePFR(
       profileFlows[compId].push(currentFlowsKmolS[compId] * 3600.0);
     }
 
+    // Rigorous Thiele modulus and catalyst effectiveness factor
+    const kAtT = nominalRxn
+      ? Math.exp(Math.max(-40, Math.min(30, (-nominalRxn.activationEnergyKJPerMol * 1000) / (UNIVERSAL_GAS_CONSTANT_R * currentTK)))) * nominalRxn.preExponentialFactorA
+      : 0.05;
+    const { effectivenessFactorEta: currentEta } = calculateThieleModulusAndEffectiveness(
+      dpM,
+      kAtT,
+      pelletDensityKgM3
+    );
+
     // Reaction rates & heat generation
-    const ratesEval = calculateSpeciesGenerationRates(spec.reactions, currentConc, currentTK);
+    const ratesEval = calculateSpeciesGenerationRates(spec.reactions, currentConc, currentTK, currentEta);
     for (const r of ratesEval.reactionRates) {
       profileRates[r.reactionId].push(r.netRateKmolM3S);
     }
@@ -358,22 +383,52 @@ export function solvePFR(
       const c: Record<string, number> = {};
       for (const k in flows) c[k] = Math.max(0, flows[k] / vf);
 
-      const gen = calculateSpeciesGenerationRates(spec.reactions, c, TK);
+      const kAtT_deriv = nominalRxn
+        ? Math.exp(Math.max(-40, Math.min(30, (-nominalRxn.activationEnergyKJPerMol * 1000) / (UNIVERSAL_GAS_CONSTANT_R * TK)))) * nominalRxn.preExponentialFactorA
+        : 0.05;
+      const { effectivenessFactorEta: derivEta } = calculateThieleModulusAndEffectiveness(
+        dpM,
+        kAtT_deriv,
+        pelletDensityKgM3
+      );
+
+      const gen = calculateSpeciesGenerationRates(spec.reactions, c, TK, derivEta);
+
+      // Catalyst bulk density scaling for heterogeneous packed bed (Technical Report §4.2)
+      const scaledRates: Record<string, number> = {};
+      for (const compId in gen.speciesRatesKmolM3S) {
+        scaledRates[compId] = gen.speciesRatesKmolM3S[compId] * bulkDensityKgM3;
+      }
+      const scaledHeatGenKW_M3 = gen.totalHeatGenerationKW_M3 * bulkDensityKgM3;
+
+      // Rigorous Mixture Heat Capacity calculation using NASA/Shomate-polynomial cpCoeffs:
+      // Cp_i(T) = A + B*T + C*T^2 + D*T^3 in J/(mol·K) = kJ/(kmol·K)
+      // Heat Capacity Flow Rate = sum(F_i * Cp_i) in (kmol/s) * (kJ/(kmol·K)) = kJ/(s·K) = kW/K
+      let totalCpFlowKW_K = 0;
+      for (const compId in flows) {
+        const fi = flows[compId];
+        if (fi <= 0) continue;
+        const comp = PURE_COMPONENTS_DB[compId];
+        if (comp && comp.cpCoeffs) {
+          const [A, B, C, D] = comp.cpCoeffs;
+          const cp_i = A + B * TK + C * Math.pow(TK, 2) + D * Math.pow(TK, 3);
+          totalCpFlowKW_K += fi * Math.max(10.0, cp_i);
+        } else {
+          totalCpFlowKW_K += fi * 45.0; // Fallback for unlisted pseudo-fractions
+        }
+      }
+      const heatCapacityKW_K = Math.max(0.1, totalCpFlowKW_K);
 
       // Energy balance dT/dV
       let dT_dV = 0;
       if (spec.energyMode === 'Adiabatic') {
-        const heatCapacityKW_K = Math.max(0.1, totF * 45.0); // Approx 45 kJ/(kmol·K)
-        dT_dV = gen.totalHeatGenerationKW_M3 / heatCapacityKW_K;
+        dT_dV = scaledHeatGenKW_M3 / heatCapacityKW_K;
       } else if (spec.energyMode === 'CooledHeated') {
-        const heatCapacityKW_K = Math.max(0.1, totF * 45.0);
         const heatTransferKW_M3 = (U * aHeatM2_M3 * (TK - TaK)) / 1000.0;
-        dT_dV = (gen.totalHeatGenerationKW_M3 - heatTransferKW_M3) / heatCapacityKW_K;
+        dT_dV = (scaledHeatGenKW_M3 - heatTransferKW_M3) / heatCapacityKW_K;
       }
 
       // Ergun pressure drop dP/dV = (dP/dz) / A_c
-      const voidage = spec.catalystBedVoidage || 0.4;
-      const dpM = (spec.catalystPelletDiameterMm || 2.5) / 1000.0;
       const superficVel = vf / areaM2;
       const viscPaS = 1.8e-5;
       const dens = Math.max(0.5, (feed.totalMassFlowKgH / 3600.0) / vf);
@@ -384,10 +439,10 @@ export function solvePFR(
       const dP_dV_bar = (dP_dz_Pa / 1e5) / areaM2;
 
       return {
-        dF: gen.speciesRatesKmolM3S,
+        dF: scaledRates,
         dT: dT_dV,
         dP: dP_dV_bar,
-        heatGenKW_M3: gen.totalHeatGenerationKW_M3,
+        heatGenKW_M3: scaledHeatGenKW_M3,
       };
     };
 

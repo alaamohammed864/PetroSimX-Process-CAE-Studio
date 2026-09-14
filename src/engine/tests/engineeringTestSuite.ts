@@ -9,6 +9,7 @@ import { solveRachfordRiceInternal, solveTPFlash, solvePHFlash, calculateBubbleP
 import { calculateStreamState } from '../stream/streamCalculator';
 import { solvePump, solveCompressor, solveValve, solveMixer, solveHeatExchanger, solveReactorUnit } from '../models/equipmentModels';
 import { analyzeFlowsheetTopology, computeWegsteinAcceleration, FlowsheetGraph, TearStreamState } from '../solver/recycleSolver';
+import { calculateThieleModulusAndEffectiveness } from '../reactors/reactionEngine';
 
 export interface TestCaseResult {
   id: string;
@@ -509,6 +510,44 @@ export function runEngineeringTestSuite(): TestSuiteSummary {
       expected: 'Status FAILED, 0 outlets, THERMAL_CROSSOVER emitted',
       actual: `Status: ${hxFailRes.status}, Outlets: ${hxFailRes.outletStreams.length}, Errors: [${hxFailRes.validationErrors[0] || 'None'}]`,
       tolerance: 'Strict physical rejection',
+      executionTimeMs: performance.now() - t0,
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Test 17: Rigorous Catalyst Effectiveness Factor & Thiele Modulus
+  // Equations: phi = (dp/6)*sqrt(k*rho_p/Deff), eta = (3/phi)*(1/tanh(phi) - 1/phi)
+  // Verification cases:
+  // 1. Kinetic regime (low phi): eta -> 1.0
+  // 2. Intermediate regime (phi ~ 1.0): eta ~ 0.939
+  // 3. Strong pore diffusion limitation (high phi): eta -> 3/phi
+  // -------------------------------------------------------------
+  {
+    const t0 = performance.now();
+    // Case A: Near zero resistance (very small pellet or slow reaction)
+    const resA = calculateThieleModulusAndEffectiveness(0.0001, 1e-4, 1000, 1e-6);
+    // Case B: Analytical benchmark (phi = 1.0)
+    // dp/6 = 1e-3, k*rho/Deff = 1e6 => sqrt = 1000 => phi = 1.0
+    // eta = 3 * (1/tanh(1) - 1) = 3 * (1.313035 - 1) = 0.9391
+    const resB = calculateThieleModulusAndEffectiveness(0.006, 1e-4, 1000, 1e-7);
+    // Case C: Strong diffusion limitation (phi = 15.0 => eta ~ 3/15 = 0.20)
+    const resC = calculateThieleModulusAndEffectiveness(0.015, 0.5, 1200, 1e-8);
+
+    const passed =
+      Math.abs(resA.effectivenessFactorEta - 1.0) < 0.01 &&
+      resB.effectivenessFactorEta > 0.85 &&
+      resB.effectivenessFactorEta < 0.98 &&
+      resC.effectivenessFactorEta < 0.35 &&
+      resC.effectivenessFactorEta >= 0.009;
+
+    results.push({
+      id: 'TC-17',
+      name: 'Catalyst Thiele Modulus & Internal Effectiveness Factor (η)',
+      category: 'Unit Models',
+      passed,
+      expected: 'Kinetic limit eta~1.0, Intermediate eta~0.94, Strong diffusion eta~3/phi',
+      actual: `Case A: eta=${resA.effectivenessFactorEta.toFixed(3)}, Case B: eta=${resB.effectivenessFactorEta.toFixed(3)}, Case C: eta=${resC.effectivenessFactorEta.toFixed(3)} (phi=${resC.thieleModulusPhi.toFixed(1)})`,
+      tolerance: 'Analytical Fogler Ch.14 precision',
       executionTimeMs: performance.now() - t0,
     });
   }

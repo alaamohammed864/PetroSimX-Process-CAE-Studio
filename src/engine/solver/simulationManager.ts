@@ -85,47 +85,17 @@ export interface SimulationResult {
 }
 
 /**
- * Pre-simulation validation checks
+ * Pre-simulation validation checks leveraging the rigorous Process Validation Suite
  */
 export function validateFlowsheet(
   units: EquipmentUnit[],
   streams: ProcessStream[]
 ): { isValid: boolean; errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  if (units.length === 0) {
-    errors.push('Flowsheet contains no unit operations.');
-  }
-  if (streams.length === 0) {
-    errors.push('Flowsheet contains no process streams.');
-  }
-
-  // Check streams for valid properties
-  streams.forEach((s) => {
-    if (s.tempC < -273.15) {
-      errors.push(`Stream ${s.id} temperature (${s.tempC} °C) is below absolute zero.`);
-    }
-    if (s.presBar <= 0) {
-      errors.push(`Stream ${s.id} pressure (${s.presBar} bar) must be strictly positive.`);
-    }
-    if (s.flowKgH < 0) {
-      errors.push(`Stream ${s.id} flow rate cannot be negative.`);
-    }
-
-    let sumZ = 0;
-    for (const c in s.compositions) {
-      sumZ += Math.max(0, s.compositions[c] || 0);
-    }
-    if (sumZ <= 1e-4) {
-      warnings.push(`Stream ${s.id} composition appears empty or zero.`);
-    }
-  });
-
+  const report = validateEngineeringRules(units, streams);
   return {
-    isValid: errors.length === 0,
-    errors,
-    warnings,
+    isValid: report.passed,
+    errors: report.errors.map((e) => `[${e.category.toUpperCase()}] ${e.message}`),
+    warnings: report.warnings.map((w) => `[${w.category.toUpperCase()}] ${w.message}`),
   };
 }
 

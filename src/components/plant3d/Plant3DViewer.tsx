@@ -25,6 +25,65 @@ interface FlowParticle {
   speed: number;
 }
 
+/**
+ * Rigorously disposes Three.js materials and associated WebGL textures
+ */
+function disposeThreeMaterial(mat: THREE.Material): void {
+  const matAny = mat as unknown as Record<string, unknown>;
+  const textureSlots = [
+    'map',
+    'lightMap',
+    'bumpMap',
+    'normalMap',
+    'specularMap',
+    'envMap',
+    'alphaMap',
+    'aoMap',
+    'displacementMap',
+    'emissiveMap',
+    'gradientMap',
+    'metalnessMap',
+    'roughnessMap',
+  ];
+
+  for (const slot of textureSlots) {
+    const tex = matAny[slot];
+    if (tex && typeof (tex as { dispose?: () => void }).dispose === 'function') {
+      (tex as { dispose: () => void }).dispose();
+    }
+  }
+  mat.dispose();
+}
+
+/**
+ * Traverses an Object3D hierarchy and systematically frees GPU geometries and materials
+ */
+function disposeThreeHierarchy(node: THREE.Object3D): void {
+  for (let i = node.children.length - 1; i >= 0; i--) {
+    disposeThreeHierarchy(node.children[i]);
+  }
+
+  if (node instanceof THREE.Mesh) {
+    if (node.geometry) {
+      node.geometry.dispose();
+    }
+
+    if (node.material) {
+      if (Array.isArray(node.material)) {
+        for (const m of node.material) {
+          disposeThreeMaterial(m);
+        }
+      } else {
+        disposeThreeMaterial(node.material);
+      }
+    }
+  }
+
+  if (node.parent) {
+    node.parent.remove(node);
+  }
+}
+
 export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
   units,
   streams,
@@ -414,7 +473,21 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
       canvas.removeEventListener('click', handleClick);
       resizeObserver.disconnect();
       controls.dispose();
+
+      // Systematic GPU memory freeing
+      disposeThreeHierarchy(scene);
+
+      if (highlightBoxRef.current) {
+        highlightBoxRef.current.geometry?.dispose();
+        if (Array.isArray(highlightBoxRef.current.material)) {
+          highlightBoxRef.current.material.forEach((m) => m.dispose());
+        } else {
+          highlightBoxRef.current.material?.dispose();
+        }
+      }
+
       renderer.dispose();
+      renderer.forceContextLoss();
       scene.clear();
     };
   }, [units, streams, renderMode, colorMode, showPipeRacks, isFlowAnimated, onSelectUnit, onSelectStream]);

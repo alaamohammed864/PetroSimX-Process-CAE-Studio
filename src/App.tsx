@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, lazy, Suspense } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   EquipmentUnit,
   ProcessStream,
@@ -22,15 +23,47 @@ import { DiagnosticConsole } from './components/DiagnosticConsole';
 import { SensitivityModal } from './components/SensitivityModal';
 import { UnitConverterModal } from './components/UnitConverterModal';
 import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal';
-import { ThermodynamicsView } from './components/views/ThermodynamicsView';
-import { ReactorEngineeringView } from './components/views/ReactorEngineeringView';
-import { MatrixSheetsView } from './components/views/MatrixSheetsView';
-import { DigitalTwinView } from './components/views/DigitalTwinView';
-import { OptimizationView } from './components/views/OptimizationView';
-import { ColumnDesignView } from './components/views/ColumnDesignView';
-import { EnergyUtilitiesView } from './components/views/EnergyUtilitiesView';
-import { Plant3DViewer } from './components/plant3d/Plant3DViewer';
-import { EngineeringReportsView } from './components/views/EngineeringReportsView';
+
+// Lazy-loaded Views for Bundle Optimization & Memory Management
+const ThermodynamicsView = lazy(() =>
+  import('./components/views/ThermodynamicsView').then((m) => ({ default: m.ThermodynamicsView }))
+);
+const ReactorEngineeringView = lazy(() =>
+  import('./components/views/ReactorEngineeringView').then((m) => ({ default: m.ReactorEngineeringView }))
+);
+const MatrixSheetsView = lazy(() =>
+  import('./components/views/MatrixSheetsView').then((m) => ({ default: m.MatrixSheetsView }))
+);
+const DigitalTwinView = lazy(() =>
+  import('./components/views/DigitalTwinView').then((m) => ({ default: m.DigitalTwinView }))
+);
+const OptimizationView = lazy(() =>
+  import('./components/views/OptimizationView').then((m) => ({ default: m.OptimizationView }))
+);
+const ColumnDesignView = lazy(() =>
+  import('./components/views/ColumnDesignView').then((m) => ({ default: m.ColumnDesignView }))
+);
+const EnergyUtilitiesView = lazy(() =>
+  import('./components/views/EnergyUtilitiesView').then((m) => ({ default: m.EnergyUtilitiesView }))
+);
+const Plant3DViewer = lazy(() =>
+  import('./components/plant3d/Plant3DViewer').then((m) => ({ default: m.Plant3DViewer }))
+);
+const EngineeringReportsView = lazy(() =>
+  import('./components/views/EngineeringReportsView').then((m) => ({ default: m.EngineeringReportsView }))
+);
+
+const ViewLoadingFallback = () => (
+  <div className="flex-1 flex items-center justify-center bg-[#060e20] text-[#bcc9cd] min-h-[400px]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-2 border-[#00e5ff] border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-mono tracking-widest text-[#00e5ff] uppercase">
+        Loading CAE Module...
+      </span>
+    </div>
+  </div>
+);
+
 import { DecisionVariable, ProcessCase } from './types/optimization';
 import { SimulationTaskController } from './engine/worker/simulationWorkerClient';
 import { generateStructuredReport, StructuredEngineeringReport } from './engine/reporting/engineeringReportGenerator';
@@ -813,7 +846,16 @@ export default function App() {
 
       {/* Main Workspace Views */}
       <main className="flex-1 flex overflow-hidden relative">
-        {currentTab === 'flowsheet-canvas' && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentTab}
+            initial={{ opacity: 0, y: 3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.15, ease: 'easeInOut' }}
+            className="flex-1 flex w-full h-full overflow-hidden"
+          >
+            {currentTab === 'flowsheet-canvas' && (
           <div className="flex-1 flex w-full h-full overflow-hidden">
             {/* Left Palette: Unit Operations & Components Library */}
             <EquipmentPalette
@@ -874,118 +916,138 @@ export default function App() {
 
         {currentTab === '3d-plant-view' && (
           <div className="flex-1 overflow-hidden bg-[#060e20] flex flex-col relative">
-            <Plant3DViewer
-              units={units}
-              streams={streams}
-              selectedUnitId={selectedUnitId}
-              selectedStreamId={selectedStreamId}
-              onSelectUnit={(id) => {
-                setSelectedUnitId(id);
-                setSelectedStreamId(null);
-              }}
-              onSelectStream={(id) => {
-                setSelectedStreamId(id);
-                if (id) {
-                  const s = streams.find((item) => item.id === id);
-                  if (s) {
-                    const src = units.find((u) => u.outletStreamIds.includes(id));
-                    if (src) setSelectedUnitId(src.id);
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <Plant3DViewer
+                units={units}
+                streams={streams}
+                selectedUnitId={selectedUnitId}
+                selectedStreamId={selectedStreamId}
+                onSelectUnit={(id) => {
+                  setSelectedUnitId(id);
+                  setSelectedStreamId(null);
+                }}
+                onSelectStream={(id) => {
+                  setSelectedStreamId(id);
+                  if (id) {
+                    const s = streams.find((item) => item.id === id);
+                    if (s) {
+                      const src = units.find((u) => u.outletStreamIds.includes(id));
+                      if (src) setSelectedUnitId(src.id);
+                    }
                   }
-                }
-              }}
-              unitSystem={unitSystem}
-            />
+                }}
+                unitSystem={unitSystem}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'column-design' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <ColumnDesignView
-              unit={selectedUnit?.type === 'column' ? selectedUnit : units.find((u) => u.type === 'column') || units[0]}
-              feedStream={streams[0]}
-              components={components}
-              unitSystem={unitSystem}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ColumnDesignView
+                unit={selectedUnit?.type === 'column' ? selectedUnit : units.find((u) => u.type === 'column') || units[0]}
+                feedStream={streams[0]}
+                components={components}
+                unitSystem={unitSystem}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'thermodynamics-engine' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <ThermodynamicsView
-              components={components}
-              eos={eos}
-              onChangeEos={setEos}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ThermodynamicsView
+                components={components}
+                eos={eos}
+                onChangeEos={setEos}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'reactor-engineering' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <ReactorEngineeringView
-              unit={selectedUnit?.type === 'reactor' ? selectedUnit : units[3]}
-              inletStream={r101InletStream}
-              unitSystem={unitSystem}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ReactorEngineeringView
+                unit={selectedUnit?.type === 'reactor' ? selectedUnit : units[3]}
+                inletStream={r101InletStream}
+                unitSystem={unitSystem}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'stream-matrix' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <MatrixSheetsView
-              streams={streams}
-              components={components}
-              unitSystem={unitSystem}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <MatrixSheetsView
+                streams={streams}
+                components={components}
+                unitSystem={unitSystem}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'digital-twin-monitor' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <DigitalTwinView
-              units={units}
-              streams={streams}
-              unitSystem={unitSystem}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <DigitalTwinView
+                units={units}
+                streams={streams}
+                unitSystem={unitSystem}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'sensitivity-optimization' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <OptimizationView
-              units={units}
-              streams={streams}
-              components={components}
-              unitSystem={unitSystem}
-              onApplyOptimalValuesToFlowsheet={handleApplyOptimalVariables}
-              onApplyCaseToFlowsheet={handleApplyCaseToFlowsheet}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <OptimizationView
+                units={units}
+                streams={streams}
+                components={components}
+                unitSystem={unitSystem}
+                onApplyOptimalValuesToFlowsheet={handleApplyOptimalVariables}
+                onApplyCaseToFlowsheet={handleApplyCaseToFlowsheet}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentTab === 'energy-utilities' && (
           <div className="flex-1 overflow-y-auto bg-[#060e20]">
-            <EnergyUtilitiesView
-              units={units}
-              streams={streams}
-              onSelectUnit={(id) => {
-                setSelectedUnitId(id);
-                setCurrentTab('flowsheet-canvas');
-              }}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <EnergyUtilitiesView
+                units={units}
+                streams={streams}
+                onSelectUnit={(id) => {
+                  setSelectedUnitId(id);
+                  setCurrentTab('flowsheet-canvas');
+                }}
+              />
+            </Suspense>
           </div>
         )}
 
-        {currentTab === 'engineering-reports' && (
-          <EngineeringReportsView
-            units={units}
-            streams={streams}
-            components={components}
-            unitSystem={unitSystem}
-            simulationResult={simulationResult}
-            validationReport={validationReport}
-            onNavigateToFlowsheet={() => setCurrentTab('flowsheet-canvas')}
-          />
-        )}
+            {currentTab === 'engineering-reports' && (
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <EngineeringReportsView
+                  units={units}
+                  streams={streams}
+                  components={components}
+                  unitSystem={unitSystem}
+                  simulationResult={simulationResult}
+                  validationReport={validationReport}
+                  onNavigateToFlowsheet={() => setCurrentTab('flowsheet-canvas')}
+                />
+              </Suspense>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Bottom Diagnostic Console & Solver Matrix Dock */}
