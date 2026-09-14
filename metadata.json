@@ -1,6 +1,6 @@
 {
-  "name": "PetroSimX Process CAE Studio",
-  "description": "Industrial-grade chemical engineering flowsheet CAD, simulation, reactor kinetics, and thermodynamic matrix workstation.",
+  "name": "PETROSIMX - Process Simulation & Reactor Engineering Suite",
+  "description": "Production-grade chemical engineering flowsheet CAD, steady-state simulation, reactor kinetics, and thermodynamic matrix workstation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

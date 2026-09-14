@@ -1,6 +1,8 @@
 import React from 'react';
 import { UnitSystem, ViewTab } from '../types/simulation';
 import { PWAInstallButton } from './pwa/PWAInstallButton';
+import { useI18n } from '../i18n/I18nContext';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface HeaderProps {
   currentTab: ViewTab;
@@ -13,6 +15,7 @@ interface HeaderProps {
   onStep: () => void;
   onClearDiagnostics: () => void;
   onOpenUnitConverter: () => void;
+  onOpenShortcuts?: () => void;
   onNewProject: () => void;
   onOpenProject: () => void;
   onSaveProject: () => void;
@@ -38,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   onStep,
   onClearDiagnostics,
   onOpenUnitConverter,
+  onOpenShortcuts,
   onNewProject,
   onOpenProject,
   onSaveProject,
@@ -51,6 +55,9 @@ export const Header: React.FC<HeaderProps> = ({
   equationOfState,
   onChangeEos,
 }) => {
+  const { t, language, setLanguage } = useI18n();
+  const { theme, toggleTheme } = useAppTheme();
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#060e20] flex flex-col border-b border-[#3d494c]/30 select-none">
       {/* 1. Title bar & System status */}
@@ -65,14 +72,16 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="flex items-center gap-1.5 pl-2">
             <span className="material-symbols-outlined text-[#4cd7f6] text-[15px]">account_tree</span>
-            <span className="font-semibold tracking-tight text-[#dae2fd] uppercase text-[12px]">PETROSIMX</span>
-            <span className="font-mono text-[10px] text-[#869397]">OFFLINE-CAE</span>
+            <span className="font-bold tracking-tight text-[#dae2fd] uppercase text-[12px]">PETROSIMX</span>
+            <span className="hidden xl:inline font-mono text-[9px] text-[#4cd7f6]/90 bg-[#4cd7f6]/10 px-1.5 py-0.5 rounded border border-[#4cd7f6]/30">
+              Process Simulation &amp; Reactor Engineering Suite
+            </span>
           </div>
 
           <button
             onClick={onOpenProjectManager}
             className="flex items-center gap-1.5 bg-[#171f33] hover:bg-[#222a3d] px-2 py-0.5 rounded border border-[#3d494c]/40 text-left transition-colors"
-            title="Open Project Manager & Offline Database"
+            title={t('header.projectManager')}
             type="button"
           >
             <span className="material-symbols-outlined text-[12px] text-[#4cd7f6]">inventory_2</span>
@@ -80,13 +89,37 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* PWA Install Button */}
           <PWAInstallButton />
 
+          {/* Language Switcher (EN / العربية) */}
+          <button
+            onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#131b2e] hover:bg-[#1e273d] border border-[#3d494c]/40 text-[10.5px] font-mono text-[#dae2fd] transition-colors"
+            title={language === 'en' ? 'Switch to Arabic (العربية)' : 'التبديل إلى الإنجليزية (English)'}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[13px] text-[#4cd7f6]">translate</span>
+            <span className="font-semibold">{language === 'en' ? 'العربية' : 'EN'}</span>
+          </button>
+
+          {/* Theme Toggle (Dark / Light) */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#131b2e] hover:bg-[#1e273d] border border-[#3d494c]/40 text-[10.5px] font-mono text-[#dae2fd] transition-colors"
+            title={theme === 'dark' ? t('header.themeLight') : t('header.themeDark')}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[13px] text-[#ffb95f]">
+              {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+            </span>
+            <span className="hidden sm:inline uppercase text-[9.5px]">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+
           {/* EOS Selector */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#131b2e] border border-[#3d494c]/30 text-[10.5px]">
-            <span className="text-[#869397] font-mono">EOS:</span>
+            <span className="text-[#869397] font-mono">{t('header.eos')}</span>
             <select
               value={equationOfState}
               onChange={(e) => onChangeEos(e.target.value)}
@@ -103,13 +136,13 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1bbd85]/20 border border-[#4edea3]/30">
             <div className={`w-1.5 h-1.5 rounded-full ${isSolving ? 'bg-[#ffb95f] animate-ping' : 'bg-[#4edea3]'}`} />
             <span className={`font-mono text-[10px] ${isSolving ? 'text-[#ffb95f]' : 'text-[#4edea3]'}`}>
-              {isSolving ? 'ITERATING (Worker)...' : 'CONVERGED (Local)'}
+              {isSolving ? t('header.iterating') : t('header.converged')}
             </span>
           </div>
 
           {/* Units System Selector */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#131b2e] border border-[#3d494c]/30 text-[10.5px]">
-            <span className="text-[#869397] font-mono">UNITS:</span>
+            <span className="text-[#869397] font-mono">{t('header.units')}</span>
             <select
               value={unitSystem}
               onChange={(e) => onUnitSystemChange(e.target.value as UnitSystem)}
@@ -121,8 +154,20 @@ export const Header: React.FC<HeaderProps> = ({
             </select>
           </div>
 
+          {/* Keyboard Shortcuts Button */}
+          {onOpenShortcuts && (
+            <button
+              onClick={onOpenShortcuts}
+              className="w-5 h-5 rounded bg-[#171f33] hover:bg-[#222a3d] border border-[#3d494c]/50 flex items-center justify-center text-[#4cd7f6] font-mono font-bold text-[11px] transition-colors"
+              title={t('header.shortcuts')}
+              type="button"
+            >
+              ?
+            </button>
+          )}
+
           {/* User Account */}
-          <div className="w-5 h-5 rounded-full bg-[#4cd7f6] flex items-center justify-center text-[#003640] font-bold text-[10px]" title="Licensed to Senior Lead Process Engineer">
+          <div className="w-5 h-5 rounded-full bg-[#4cd7f6] flex items-center justify-center text-[#003640] font-bold text-[10px]" title="Licensed Process CAE Workstation">
             <span className="material-symbols-outlined text-[13px]">person</span>
           </div>
         </div>
@@ -132,16 +177,16 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="h-6 px-2 flex items-center justify-between bg-[#131b2e] border-b border-[#3d494c]/20 text-[11px]">
         <nav className="flex items-center gap-0.5">
           {[
-            { id: 'flowsheet-canvas', label: 'Flowsheet' },
-            { id: '3d-plant-view', label: '3D Plant' },
-            { id: 'column-design', label: 'Column Design' },
-            { id: 'thermodynamics-engine', label: 'Thermodynamics' },
-            { id: 'reactor-engineering', label: 'Reactors' },
-            { id: 'sensitivity-optimization', label: 'Optimization' },
-            { id: 'energy-utilities', label: 'Energy & Emissions' },
-            { id: 'engineering-reports', label: 'Reports & Audits' },
-            { id: 'stream-matrix', label: 'Matrix Sheets' },
-            { id: 'digital-twin-monitor', label: 'Digital Twin' },
+            { id: 'flowsheet-canvas', labelKey: 'tab.flowsheet', defaultLabel: 'Flowsheet' },
+            { id: '3d-plant-view', labelKey: 'tab.3dPlant', defaultLabel: '3D Plant' },
+            { id: 'column-design', labelKey: 'tab.columnDesign', defaultLabel: 'Column Design' },
+            { id: 'thermodynamics-engine', labelKey: 'tab.thermodynamics', defaultLabel: 'Thermodynamics' },
+            { id: 'reactor-engineering', labelKey: 'tab.reactors', defaultLabel: 'Reactors' },
+            { id: 'sensitivity-optimization', labelKey: 'tab.optimization', defaultLabel: 'Optimization' },
+            { id: 'energy-utilities', labelKey: 'tab.energyEmissions', defaultLabel: 'Energy & Emissions' },
+            { id: 'engineering-reports', labelKey: 'tab.reports', defaultLabel: 'Reports & Audits' },
+            { id: 'stream-matrix', labelKey: 'tab.matrixSheets', defaultLabel: 'Matrix Sheets' },
+            { id: 'digital-twin-monitor', labelKey: 'tab.digitalTwin', defaultLabel: 'Digital Twin' },
           ].map((tab) => {
             const isActive = currentTab === tab.id;
             return (
@@ -154,7 +199,7 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'text-[#bcc9cd] hover:bg-[#171f33] hover:text-[#dae2fd]'
                 }`}
               >
-                {tab.label}
+                {t(tab.labelKey, tab.defaultLabel)}
               </button>
             );
           })}
@@ -176,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onNewProject}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="New Flowsheet"
+          title={t('header.newProject')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">post_add</span>
@@ -184,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenProject}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Open Project (.petx)"
+          title={t('header.openProject')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">folder_open</span>
@@ -192,7 +237,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onSaveProject}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Save Model"
+          title={t('header.saveProject')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">save</span>
@@ -205,19 +250,19 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onSolve}
           disabled={isSolving}
           className="flex items-center gap-1 px-2.5 py-0.5 bg-[#4cd7f6]/20 hover:bg-[#4cd7f6]/30 text-[#4cd7f6] border border-[#4cd7f6]/40 rounded font-mono text-[10.5px] font-semibold transition-all active:scale-95"
-          title="Solve All (Run Simulation)"
+          title={t('header.solveTooltip')}
           type="button"
         >
           <span className={`material-symbols-outlined text-[15px] ${isSolving ? 'animate-spin' : ''}`}>
             {isSolving ? 'refresh' : 'play_arrow'}
           </span>
-          <span>SOLVE</span>
+          <span>{t('header.solve')}</span>
         </button>
 
         <button
           onClick={onPause}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Pause Calculation"
+          title={t('header.pause')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">pause</span>
@@ -226,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onStep}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Step Iteration"
+          title={t('header.step')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">redo</span>
@@ -235,7 +280,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onClearDiagnostics}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Clear Diagnostics Log"
+          title={t('header.clearLogs')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">layers_clear</span>
@@ -251,7 +296,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[15px] text-[#ffb95f]">trending_flat</span>
-          <span>Stream</span>
+          <span>{t('header.addStream')}</span>
         </button>
 
         <button
@@ -261,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[15px] text-[#4edea3]">propane_tank</span>
-          <span>Reactor</span>
+          <span>{t('header.addReactor')}</span>
         </button>
 
         <button
@@ -271,7 +316,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[15px] text-[#4cd7f6]">sync_alt</span>
-          <span>HeatEx</span>
+          <span>{t('header.addHeatEx')}</span>
         </button>
 
         <button
@@ -281,7 +326,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[15px] text-[#ffddb8]">view_column</span>
-          <span>Column</span>
+          <span>{t('header.addColumn')}</span>
         </button>
 
         <div className="h-4 w-px bg-[#3d494c]/40 mx-1" />
@@ -319,7 +364,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onFitView}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Zoom Extents / Fit View"
+          title={t('header.fitView')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">fit_screen</span>
@@ -334,13 +379,13 @@ export const Header: React.FC<HeaderProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[14px]">grid_4x4</span>
-          <span>{snapEnabled ? 'SNAP 10mm' : 'SNAP OFF'}</span>
+          <span>{snapEnabled ? t('header.snapOn') : t('header.snapOff')}</span>
         </button>
 
         <button
           onClick={onOpenUnitConverter}
           className="p-1 hover:bg-[#171f33] hover:text-[#dae2fd] text-[#bcc9cd] rounded"
-          title="Chemical Engineering Units Converter"
+          title={t('header.unitConverter')}
           type="button"
         >
           <span className="material-symbols-outlined text-[16px]">calculate</span>
@@ -349,3 +394,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

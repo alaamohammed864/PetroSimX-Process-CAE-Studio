@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   EquipmentUnit,
   ProcessStream,
@@ -21,6 +21,7 @@ import { PropertyInspector } from './components/PropertyInspector';
 import { DiagnosticConsole } from './components/DiagnosticConsole';
 import { SensitivityModal } from './components/SensitivityModal';
 import { UnitConverterModal } from './components/UnitConverterModal';
+import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal';
 import { ThermodynamicsView } from './components/views/ThermodynamicsView';
 import { ReactorEngineeringView } from './components/views/ReactorEngineeringView';
 import { MatrixSheetsView } from './components/views/MatrixSheetsView';
@@ -89,6 +90,7 @@ export default function App() {
   // Modals
   const [isSensitivityOpen, setIsSensitivityOpen] = useState<boolean>(false);
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
 
   // Auto-Save and Crash Recovery
   const {
@@ -704,6 +706,54 @@ export default function App() {
     document.body.removeChild(link);
   }, [streams]);
 
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+        return;
+      }
+
+      if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
+        e.preventDefault();
+        handleSolve();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveProject();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        setIsProjectManagerOpen(true);
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setCurrentTab('stream-matrix');
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setCurrentTab('energy-utilities');
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        setCurrentTab('engineering-reports');
+      } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        setIsConverterOpen((prev) => !prev);
+      } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setIsSensitivityOpen((prev) => !prev);
+      } else if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setIsSensitivityOpen(false);
+        setIsConverterOpen(false);
+        setIsProjectManagerOpen(false);
+        setIsShortcutsOpen(false);
+        setSelectedStreamId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSolve, handleSaveProject]);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#060e20] text-[#dae2fd] font-sans antialiased">
       {/* Top Engineering Ribbon / Header */}
@@ -722,6 +772,7 @@ export default function App() {
         onOpenProject={handleOpenProject}
         onSaveProject={handleSaveProject}
         onOpenProjectManager={() => setIsProjectManagerOpen(true)}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
         projectName={currentProject.name}
         onAddUnit={handleAddUnit}
         onAddStream={handleAddStream}
@@ -790,6 +841,21 @@ export default function App() {
               snapEnabled={snapEnabled}
               onUpdateUnitPosition={handleUpdateUnitPosition}
               onOpen3DView={() => setCurrentTab('3d-plant-view')}
+              onDeleteUnit={(id) => {
+                setUnits((prev) => prev.filter((u) => u.id !== id));
+                if (selectedUnitId === id) setSelectedUnitId('');
+              }}
+              onAddUnit={handleSelectUnitType}
+              onAddStream={handleAddStream}
+              onSolveFlowsheet={handleSolve}
+              onViewProfiles={(id) => {
+                setSelectedUnitId(id);
+                setCurrentTab('reactor-engineering');
+              }}
+              onViewHydraulics={(id) => {
+                setSelectedUnitId(id);
+                setCurrentTab('column-design');
+              }}
             />
 
             {/* Right Property Inspector: Detailed specifications & kinetics */}
@@ -989,6 +1055,12 @@ export default function App() {
         onUpdateCurrentProject={(updated) => {
           setCurrentProject((prev) => ({ ...prev, ...updated }));
         }}
+      />
+
+      {/* Engineering Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
 
       {/* Floating Offline Mode Indicator Badge */}

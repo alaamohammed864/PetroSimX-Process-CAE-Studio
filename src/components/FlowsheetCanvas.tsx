@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { EquipmentUnit, ProcessStream, UnitSystem } from '../types/simulation';
+import { EquipmentUnit, ProcessStream, UnitSystem, UnitType } from '../types/simulation';
 import { formatFlow, formatPres, formatTemp } from '../engine/thermoEngine';
+import { FlowsheetContextMenu } from './FlowsheetContextMenu';
+import { useI18n } from '../i18n/I18nContext';
 
 interface FlowsheetCanvasProps {
   units: EquipmentUnit[];
@@ -13,6 +15,12 @@ interface FlowsheetCanvasProps {
   snapEnabled: boolean;
   onUpdateUnitPosition: (id: string, x: number, y: number) => void;
   onOpen3DView?: () => void;
+  onDeleteUnit?: (id: string) => void;
+  onAddUnit?: (type: UnitType) => void;
+  onAddStream?: () => void;
+  onSolveFlowsheet?: () => void;
+  onViewProfiles?: (id: string) => void;
+  onViewHydraulics?: (id: string) => void;
 }
 
 export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
@@ -26,7 +34,14 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   snapEnabled,
   onUpdateUnitPosition,
   onOpen3DView,
+  onDeleteUnit,
+  onAddUnit,
+  onAddStream,
+  onSolveFlowsheet,
+  onViewProfiles,
+  onViewHydraulics,
 }) => {
+  const { t } = useI18n();
   const [zoom, setZoom] = useState(1.0);
   const [showFlags, setShowFlags] = useState(true);
   const [showHeatGradient, setShowHeatGradient] = useState(false);
@@ -34,6 +49,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   const [mouseCoords, setMouseCoords] = useState({ x: 1420, y: 850 });
   const [isDraggingUnit, setIsDraggingUnit] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targetUnit: EquipmentUnit | null } | null>(null);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +72,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   };
 
   const handleMouseDownUnit = (e: React.MouseEvent, unit: EquipmentUnit) => {
+    if (e.button === 2) return; // Ignore right-click for dragging
     e.stopPropagation();
     onSelectUnit(unit.id);
     setIsDraggingUnit(unit.id);
@@ -64,6 +81,26 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
       const clickX = (e.clientX - rect.left) / zoom;
       const clickY = (e.clientY - rect.top) / zoom;
       setDragOffset({ x: clickX - unit.x, y: clickY - unit.y });
+    }
+  };
+
+  const handleContextMenuCanvas = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, targetUnit: null });
+  };
+
+  const handleContextMenuUnit = (e: React.MouseEvent, unit: EquipmentUnit) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectUnit(unit.id);
+    setContextMenu({ x: e.clientX, y: e.clientY, targetUnit: unit });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      setZoom((prev) => Math.min(2.5, Math.max(0.4, Number((prev + delta).toFixed(2)))));
     }
   };
 
@@ -117,6 +154,8 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
         ref={canvasContainerRef}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onContextMenu={handleContextMenuCanvas}
+        onWheel={handleWheel}
         className="relative w-full flex-1 overflow-auto bg-[#060e20]"
         style={{ minHeight: '520px' }}
       >
@@ -367,6 +406,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 1. FEED PUMP P-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'P-101')!)}
+              onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'P-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${p101.x}, ${p101.y})`}
             >
@@ -383,6 +423,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 2. HEAT EXCHANGER E-101 (Shell & Tube) */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'E-101')!)}
+              onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'E-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${e101.x}, ${e101.y})`}
             >
@@ -403,6 +444,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 3. FIRED FURNACE H-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'H-101')!)}
+              onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'H-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${h101.x}, ${h101.y})`}
             >
@@ -420,6 +462,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 4. CATALYTIC REACTOR R-101 (Hydrotreater) */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'R-101')!)}
+              onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'R-101')!)}
               className="cursor-pointer"
               transform={`translate(${r101.x}, ${r101.y})`}
             >
@@ -453,6 +496,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 5. HIGH-PRESSURE FLASH DRUM V-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'V-101')!)}
+              onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'V-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${v101.x}, ${v101.y})`}
             >
@@ -479,6 +523,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
                   <g
                     key={u.id}
                     onMouseDown={(e) => handleMouseDownUnit(e, u)}
+                    onContextMenu={(e) => handleContextMenuUnit(e, u)}
                     className="cursor-pointer hover:opacity-95"
                     transform={`translate(${u.x}, ${u.y})`}
                   >
@@ -753,6 +798,36 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
           <span className="text-[#bcc9cd]">Cursor: X: {mouseCoords.x} Y: {mouseCoords.y}</span>
         </div>
       </div>
+
+      {/* Engineering Context Menu */}
+      {contextMenu && (
+        <FlowsheetContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          targetUnit={contextMenu.targetUnit}
+          onClose={() => setContextMenu(null)}
+          onInspect={(id) => onSelectUnit(id)}
+          onRecalculate={() => onSolveFlowsheet?.()}
+          onViewProfiles={onViewProfiles}
+          onViewHydraulics={onViewHydraulics}
+          onCenterUnit={(id) => {
+            const u = units.find((item) => item.id === id);
+            if (u && canvasContainerRef.current) {
+              canvasContainerRef.current.scrollTo({
+                left: Math.max(0, u.x * zoom - 300),
+                top: Math.max(0, u.y * zoom - 200),
+                behavior: 'smooth',
+              });
+            }
+          }}
+          onView3D={() => onOpen3DView?.()}
+          onDeleteUnit={onDeleteUnit}
+          onAddUnit={(type) => onAddUnit?.(type)}
+          onAddStream={() => onAddStream?.()}
+          onSolveFlowsheet={() => onSolveFlowsheet?.()}
+          onZoomFit={() => setZoom(1.0)}
+        />
+      )}
     </section>
   );
 };
