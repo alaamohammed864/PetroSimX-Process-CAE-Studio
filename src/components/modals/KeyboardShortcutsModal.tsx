@@ -77,9 +77,14 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
 
         {/* Footer */}
         <div className="px-5 py-3 bg-[#171f33] border-t border-[#3d494c]/40 flex items-center justify-between">
-          <span className="text-[11px] text-[#869397]">
-            {language === 'ar' ? 'اضغط Esc في أي وقت للإغلاق' : 'Press Esc anytime to dismiss'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-[#869397]">
+              {language === 'ar' ? 'اضغط Esc في أي وقت للإغلاق' : 'Press Esc anytime to dismiss'}
+            </span>
+            <span className="text-[10px] font-mono text-[#ffddb8] bg-[#ffddb8]/10 px-1.5 py-0.5 rounded border border-[#ffddb8]/20">
+              Dev: ENG ALAA MOHAMMED
+            </span>
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-[#4cd7f6]/20 hover:bg-[#4cd7f6]/30 text-[#4cd7f6] border border-[#4cd7f6]/40 rounded text-xs font-semibold font-mono transition-colors"

@@ -374,7 +374,7 @@ export const EngineeringReportsView: React.FC<EngineeringReportsViewProps> = ({
                   </div>
                   <div className="flex justify-between mt-1">
                     <span className="text-[#869397]">LEAD ENG:</span>
-                    <span className="text-[#4cd7f6]">{metadata.leadEngineer.split(' ')[0]}</span>
+                    <span className="text-[#4cd7f6] font-semibold">{metadata.leadEngineer}</span>
                   </div>
                 </div>
               </div>

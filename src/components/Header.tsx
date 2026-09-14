@@ -76,6 +76,10 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden xl:inline font-mono text-[9px] text-[#4cd7f6]/90 bg-[#4cd7f6]/10 px-1.5 py-0.5 rounded border border-[#4cd7f6]/30">
               Process Simulation &amp; Reactor Engineering Suite
             </span>
+            <span className="hidden lg:inline-flex items-center gap-1 font-mono text-[9px] text-[#ffddb8] bg-[#ffddb8]/10 px-1.5 py-0.5 rounded border border-[#ffddb8]/30">
+              <span className="material-symbols-outlined text-[11px] text-[#ffddb8]">badge</span>
+              <span>DEV: ENG ALAA MOHAMMED</span>
+            </span>
           </div>
 
           <button

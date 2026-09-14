@@ -252,6 +252,9 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
             ENERGY IMBALANCE:{' '}
             <strong className="text-[#4edea3] font-bold">{energyResidual.toFixed(4)} kW</strong>
           </span>
+          <span className="hidden xl:inline-block text-[#ffddb8] bg-[#ffddb8]/10 px-1.5 py-0.5 rounded border border-[#ffddb8]/20 text-[9px] font-semibold">
+            LEAD ENG: ENG ALAA MOHAMMED
+          </span>
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="hover:text-[#dae2fd] text-[#869397] p-0.5 rounded"

@@ -227,7 +227,7 @@ export function getDefaultProjectMetadata(): ProjectMetadata {
     facility: 'BIM / Process Refinery Unit 400',
     projectNumber: 'PETRO-CAE-2026-09A',
     revision: 'Rev 4.2',
-    leadEngineer: 'Chief Process Simulation & Systems Engineer',
+    leadEngineer: 'ENG ALAA MOHAMMED',
     client: 'Process Engineering & Energy Management Cloud',
     simulationDate: new Date().toLocaleDateString('en-US', {
       year: 'numeric',
