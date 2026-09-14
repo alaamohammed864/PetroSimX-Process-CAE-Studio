@@ -106,6 +106,8 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
   const [showPipeRacks, setShowPipeRacks] = useState<boolean>(true);
   const [isMeasuring, setIsMeasuring] = useState<boolean>(false);
   const [hoveredEntity, setHoveredEntity] = useState<{ type: 'unit' | 'stream'; id: string; name: string } | null>(null);
+  const [webglError, setWebglError] = useState<string | null>(null);
+  const [canvasKey, setCanvasKey] = useState<number>(0);
 
   // References for Three.js engine
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -206,12 +208,29 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     camera.position.set(-18, 14, 22);
     cameraRef.current = camera;
 
+    // Safe WebGL context test
+    const testContext =
+      canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!testContext) {
+      setWebglError('WebGL context is not supported or was blocked by the browser environment.');
+      return;
+    }
+
     // Renderer
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+      setWebglError(null);
+    } catch (err) {
+      console.warn('WebGLRenderer initialization failed:', err);
+      setWebglError('WebGL renderer could not be initialized.');
+      return;
+    }
+
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -219,6 +238,12 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
     rendererRef.current = renderer;
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      setWebglError('WebGL context was lost. Click "Reload 3D Engine" to restore rendering.');
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost, false);
 
     // Controls
     const controls = new OrbitControls(camera, canvas);
@@ -468,9 +493,11 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     return () => {
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
+        animFrameIdRef.current = null;
       }
       canvas.removeEventListener('mousemove', handlePointerMove);
       canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
       resizeObserver.disconnect();
       controls.dispose();
 
@@ -484,13 +511,18 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
         } else {
           highlightBoxRef.current.material?.dispose();
         }
+        highlightBoxRef.current = null;
       }
 
       renderer.dispose();
-      renderer.forceContextLoss();
+      // Important: Do not invoke renderer.forceContextLoss() here, which permanently damages the canvas WebGL context across React re-mounts
       scene.clear();
+      sceneRef.current = null;
+      cameraRef.current = null;
+      rendererRef.current = null;
+      controlsRef.current = null;
     };
-  }, [units, streams, renderMode, colorMode, showPipeRacks, isFlowAnimated, onSelectUnit, onSelectStream]);
+  }, [units, streams, renderMode, colorMode, showPipeRacks, isFlowAnimated, onSelectUnit, onSelectStream, canvasKey]);
 
   return (
     <div
@@ -627,8 +659,38 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
         )}
       </div>
 
-      {/* Main Three.js Canvas */}
-      <canvas ref={canvasRef} className="w-full h-full flex-1 cursor-grab active:cursor-grabbing outline-none" />
+      {/* Main Three.js Canvas or WebGL fallback notification */}
+      {webglError ? (
+        <div className="w-full h-full flex-1 flex flex-col items-center justify-center p-8 bg-[#0a1120] text-center">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg">
+            <span className="material-symbols-outlined text-[36px]">videogame_asset_off</span>
+          </div>
+          <h3 className="text-[16px] font-bold text-[#dae2fd] mb-2 font-mono tracking-tight">
+            3D Plant CAE WebGL Diagnostics
+          </h3>
+          <p className="text-[12px] text-[#869397] max-w-md mb-6 leading-relaxed">
+            {webglError} You can restore the 3D viewport canvas or continue plant design in the 2D Flowsheet view.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setWebglError(null);
+                setCanvasKey((k) => k + 1);
+              }}
+              className="px-4 py-2 rounded-lg bg-[#4cd7f6] text-[#003640] font-bold text-[12px] hover:bg-[#72e2ff] transition-all flex items-center gap-2 shadow-md"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              Restore 3D Graphics Engine
+            </button>
+          </div>
+        </div>
+      ) : (
+        <canvas
+          key={canvasKey}
+          ref={canvasRef}
+          className="w-full h-full flex-1 cursor-grab active:cursor-grabbing outline-none"
+        />
+      )}
 
       {/* Hover Entity Label (Floating bottom center) */}
       {hoveredEntity && (
