@@ -110,7 +110,7 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
     <section className="bg-[#131b2e] flex flex-col border-t border-[#3d494c]/30 select-none">
       {/* Tab Strip & Diagnostic Status Bar */}
       <div className="h-8 px-2 bg-[#171f33] flex items-center justify-between border-b border-[#3d494c]/20">
-        <div className="flex items-center gap-1 font-mono text-[10px] overflow-x-auto">
+        <div className="flex items-center gap-1 font-mono text-[10px] overflow-x-auto no-scrollbar scroll-smooth min-w-0">
           <button
             onClick={() => {
               setActiveTab('solver');
@@ -237,20 +237,18 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-[10px] text-[#869397] shrink-0 ml-2">
+        <div className="flex items-center gap-2 font-mono text-[10px] text-[#869397] shrink-0 ml-2">
           {isSolving && (
             <div className="flex items-center gap-1 text-[#ffb95f] animate-pulse">
               <span className="material-symbols-outlined text-[13px] animate-spin">sync</span>
-              <span>SOLVING STEADY-STATE...</span>
+              <span className="hidden sm:inline">SOLVING...</span>
             </div>
           )}
-          <span>
-            MASS IMBALANCE:{' '}
-            <strong className="text-[#4edea3] font-bold">{massResidual.toFixed(4)} kg/h</strong>
+          <span className="hidden sm:inline">
+            MASS: <strong className="text-[#4edea3] font-bold">{massResidual.toFixed(2)} kg/h</strong>
           </span>
-          <span>
-            ENERGY IMBALANCE:{' '}
-            <strong className="text-[#4edea3] font-bold">{energyResidual.toFixed(4)} kW</strong>
+          <span className="hidden lg:inline">
+            ENERGY: <strong className="text-[#4edea3] font-bold">{energyResidual.toFixed(2)} kW</strong>
           </span>
           <span className="hidden xl:inline-block text-[#ffddb8] bg-[#ffddb8]/10 px-1.5 py-0.5 rounded border border-[#ffddb8]/20 text-[9px] font-semibold">
             LEAD ENG: ENG ALAA MOHAMMED
@@ -270,11 +268,11 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
 
       {/* Dock Content Area */}
       {!isCollapsed && (
-        <div className="bg-[#060e20] p-2 max-h-52 overflow-y-auto">
+        <div className="bg-[#060e20] p-2 max-h-56 lg:max-h-52 overflow-y-auto">
           {/* 1. SOLVER DIAGNOSTICS TAB */}
           {activeTab === 'solver' && (
-            <div className="grid grid-cols-12 gap-2">
-              <div className="col-span-5 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 font-mono text-[10px] flex flex-col gap-1 overflow-y-auto max-h-44">
+            <div className="flex flex-col lg:grid lg:grid-cols-12 gap-2">
+              <div className="w-full lg:col-span-5 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 font-mono text-[10px] flex flex-col gap-1 overflow-y-auto max-h-44">
                 <div className="flex items-center justify-between text-[#869397] text-[9px] pb-1 border-b border-[#3d494c]/30">
                   <span>EVENT LOG [SEQUENTIAL MODULAR SOLVER]</span>
                   <span>{logs.length} EVENTS</span>
@@ -301,7 +299,7 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
                 </div>
               </div>
 
-              <div className="col-span-7 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 overflow-x-auto max-h-44">
+              <div className="w-full lg:col-span-7 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 overflow-x-auto max-h-44">
                 <table className="w-full text-left font-mono text-[10px]">
                   <thead>
                     <tr className="text-[#869397] border-b border-[#3d494c]/30 text-[9.5px] uppercase">
@@ -351,9 +349,9 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
 
           {/* 2. RECYCLE CONVERGENCE MONITOR TAB */}
           {activeTab === 'convergence' && (
-            <div className="grid grid-cols-12 gap-3 max-h-44 overflow-y-auto">
+            <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3 max-h-56 lg:max-h-44 overflow-y-auto">
               {/* Left Summary Box */}
-              <div className="col-span-4 bg-[#171f33] p-2.5 rounded border border-[#3d494c]/30 font-mono text-[10px] space-y-2">
+              <div className="w-full lg:col-span-4 bg-[#171f33] p-2.5 rounded border border-[#3d494c]/30 font-mono text-[10px] space-y-2">
                 <div className="flex items-center justify-between border-b border-[#3d494c]/30 pb-1">
                   <span className="text-[#dae2fd] font-bold">RECYCLE LOOP ARCHITECTURE</span>
                   <span className="px-1.5 py-0.5 rounded bg-[#004e5d] text-[#4cd7f6] text-[9px] font-bold">
@@ -391,7 +389,7 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
               </div>
 
               {/* Right Iteration History Table */}
-              <div className="col-span-8 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 overflow-x-auto">
+              <div className="w-full lg:col-span-8 bg-[#171f33] p-2 rounded border border-[#3d494c]/30 overflow-x-auto">
                 <table className="w-full text-left font-mono text-[10px]">
                   <thead>
                     <tr className="text-[#869397] border-b border-[#3d494c]/30 text-[9px] uppercase">
@@ -618,9 +616,9 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
                   <span>All process streams and unit operations conform to 1st &amp; 2nd Laws of Thermodynamics. No temperature crosses, negative flows, or overpressures detected.</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-12 gap-2">
+                <div className="flex flex-col lg:grid lg:grid-cols-12 gap-2">
                   {/* Errors & Warnings list */}
-                  <div className="col-span-8 space-y-1">
+                  <div className="w-full lg:col-span-8 space-y-1">
                     {validationReport.errors.map((err, idx) => (
                       <div key={idx} className="p-1.5 rounded bg-[#93000a]/20 border border-[#ffb4ab]/40 text-[#ffb4ab] flex items-start gap-1.5">
                         <span className="material-symbols-outlined text-[15px] shrink-0">error</span>
@@ -655,7 +653,7 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
                   </div>
 
                   {/* Equipment Diagnostics Table */}
-                  <div className="col-span-4 bg-[#171f33] p-2 rounded border border-[#3d494c]/30">
+                  <div className="w-full lg:col-span-4 bg-[#171f33] p-2 rounded border border-[#3d494c]/30">
                     <span className="text-[#869397] block text-[9px] uppercase mb-1">Equipment Integrity Checks</span>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
                       {validationReport.issues.filter((i) => i.sourceType === 'unit').map((issue, idx) => (

@@ -7,6 +7,7 @@ interface EquipmentPaletteProps {
   onSelectUnitType: (type: UnitType) => void;
   activeCategory: string;
   onSelectCategory: (category: string) => void;
+  onClose?: () => void;
 }
 
 interface PaletteEquipmentItem {
@@ -24,6 +25,7 @@ export const EquipmentPalette: React.FC<EquipmentPaletteProps> = ({
   onSelectUnitType,
   activeCategory,
   onSelectCategory,
+  onClose,
 }) => {
   const [filterText, setFilterText] = useState('');
   const [editingCompId, setEditingCompId] = useState<string | null>(null);
@@ -70,14 +72,26 @@ export const EquipmentPalette: React.FC<EquipmentPaletteProps> = ({
   const totalFraction = components.reduce((sum, c) => sum + c.fraction, 0);
 
   return (
-    <aside className="w-64 shrink-0 bg-[#131b2e] border-r border-[#3d494c]/30 flex flex-col z-10 select-none overflow-hidden font-mono">
+    <aside className="w-64 max-w-[85vw] h-full shrink-0 bg-[#131b2e] border-r border-[#3d494c]/30 flex flex-col z-10 select-none overflow-hidden font-mono">
       {/* Title */}
-      <div className="h-7 px-2.5 flex items-center justify-between bg-[#171f33] border-b border-[#3d494c]/20">
+      <div className="h-8 sm:h-7 px-2.5 flex items-center justify-between bg-[#171f33] border-b border-[#3d494c]/20">
         <span className="text-[11px] uppercase text-[#dae2fd] font-semibold tracking-wider flex items-center gap-1.5">
           <span className="material-symbols-outlined text-[#4cd7f6] text-[15px]">inventory_2</span>
           <span>Equipment Palette</span>
         </span>
-        <span className="text-[#869397] text-[10px]">{equipmentItems.length} UNITS</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[#869397] text-[10px]">{equipmentItems.length} UNITS</span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded text-[#869397] hover:text-white hover:bg-[#222a3d] transition-colors"
+              title="Close Palette"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[15px]">close</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search Palette */}

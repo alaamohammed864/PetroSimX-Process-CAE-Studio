@@ -103,6 +103,46 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
     }
   };
 
+  const handleTouchStartUnit = (e: React.TouchEvent, unit: EquipmentUnit) => {
+    e.stopPropagation();
+    if (linkingSourceUnitId && onConnectUnits) {
+      if (linkingSourceUnitId !== unit.id) {
+        onConnectUnits(linkingSourceUnitId, unit.id);
+      }
+      setLinkingSourceUnitId(null);
+      return;
+    }
+
+    onSelectUnit(unit.id);
+    setIsDraggingUnit(unit.id);
+    if (canvasContainerRef.current && e.touches.length > 0) {
+      const touch = e.touches[0];
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      const clickX = (touch.clientX - rect.left) / zoom;
+      const clickY = (touch.clientY - rect.top) / zoom;
+      setDragOffset({ x: clickX - unit.x, y: clickY - unit.y });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isDraggingUnit && canvasContainerRef.current && e.touches.length > 0) {
+      const touch = e.touches[0];
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      const x = Math.round((touch.clientX - rect.left) / zoom);
+      const y = Math.round((touch.clientY - rect.top) / zoom);
+      setMouseCoords({ x: x + 800, y: y + 400 });
+
+      const snap = snapEnabled ? 10 : 1;
+      const newX = Math.round((x - dragOffset.x) / snap) * snap;
+      const newY = Math.round((y - dragOffset.y) / snap) * snap;
+      onUpdateUnitPosition(isDraggingUnit, Math.max(20, newX), Math.max(20, newY));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDraggingUnit(null);
+  };
+
   const handlePortClick = (e: React.MouseEvent, unit: EquipmentUnit, portType: 'in' | 'out') => {
     e.stopPropagation();
     if (!onConnectUnits) return;
@@ -161,21 +201,21 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   return (
     <section className="relative flex-1 flex flex-col bg-[#060e20] overflow-hidden select-none min-w-0">
       {/* Top Workspace Micro Status & Coordinate HUD Bar */}
-      <div className="flex items-center justify-between px-3 py-1 bg-[#060e20] text-[#869397] font-mono text-[10px] border-b border-[#3d494c]/30">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-[#4edea3]">
+      <div className="flex items-center justify-between px-3 py-1 bg-[#060e20] text-[#869397] font-mono text-[10px] border-b border-[#3d494c]/30 overflow-x-auto no-scrollbar whitespace-nowrap">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="flex items-center gap-1 text-[#4edea3]">
             <span className="inline-block w-2 h-2 rounded-full bg-[#4edea3] animate-pulse"></span>
-            TOPOLOGY: CLOSED-LOOP CONVERGED
+            TOPOLOGY: CONVERGED
           </span>
           <span>•</span>
           <span className="text-[#bcc9cd]">
-            ACTIVE CELL: <strong className="text-[#4cd7f6] font-mono text-[11px]">{selectedUnit.id} [{selectedUnit.tag === 'R-101' ? 'Hydrotreater' : selectedUnit.name}]</strong>
+            ACTIVE: <strong className="text-[#4cd7f6] font-mono text-[11px]">{selectedUnit.id}</strong>
           </span>
-          <span>•</span>
-          <span>TEAR CONVERGENCE: <span className="text-[#4edea3]">0.0003% RMS</span></span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline">TEAR: <span className="text-[#4edea3]">0.0003%</span></span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-[#ffddb8]">EOS: Peng-Robinson / Boston-Mathias</span>
+        <div className="hidden md:flex items-center gap-4 shrink-0">
+          <span className="text-[#ffddb8]">EOS: Peng-Robinson</span>
           <span className="text-[#bcc9cd]">CANVAS: 2400 × 1600 mm</span>
           <div className="flex items-center gap-1 bg-[#222a3d] px-2 py-0.5 rounded text-[#4cd7f6]">
             <span className="material-symbols-outlined text-[12px]">grid_goldenratio</span>
@@ -189,13 +229,15 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
         ref={canvasContainerRef}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onContextMenu={handleContextMenuCanvas}
         onWheel={handleWheel}
-        className="relative w-full flex-1 overflow-auto bg-[#060e20]"
-        style={{ minHeight: '520px' }}
+        className="relative w-full flex-1 overflow-auto bg-[#060e20] touch-manipulation"
+        style={{ minHeight: '420px' }}
       >
         {/* HUD Floating Toolstrip Overlay */}
-        <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 p-1 bg-[#171f33]/95 rounded border border-[#3d494c]/50 shadow-xl backdrop-blur">
+        <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 p-1 bg-[#171f33]/95 rounded border border-[#3d494c]/50 shadow-xl backdrop-blur max-w-[calc(100vw-24px)] overflow-x-auto no-scrollbar">
           <button
             onClick={() => {}}
             className="px-2 py-1 bg-[#222a3d] text-[#4cd7f6] rounded flex items-center gap-1 font-mono text-[10px]"
@@ -741,6 +783,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 1. FEED PUMP P-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'P-101')!)}
+              onTouchStart={(e) => handleTouchStartUnit(e, units.find((u) => u.id === 'P-101')!)}
               onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'P-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${p101.x}, ${p101.y})`}
@@ -758,6 +801,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 2. HEAT EXCHANGER E-101 (Shell & Tube) */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'E-101')!)}
+              onTouchStart={(e) => handleTouchStartUnit(e, units.find((u) => u.id === 'E-101')!)}
               onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'E-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${e101.x}, ${e101.y})`}
@@ -779,6 +823,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 3. FIRED FURNACE H-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'H-101')!)}
+              onTouchStart={(e) => handleTouchStartUnit(e, units.find((u) => u.id === 'H-101')!)}
               onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'H-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${h101.x}, ${h101.y})`}
@@ -797,6 +842,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 4. CATALYTIC REACTOR R-101 (Hydrotreater) */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'R-101')!)}
+              onTouchStart={(e) => handleTouchStartUnit(e, units.find((u) => u.id === 'R-101')!)}
               onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'R-101')!)}
               className="cursor-pointer"
               transform={`translate(${r101.x}, ${r101.y})`}
@@ -831,6 +877,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             {/* 5. HIGH-PRESSURE FLASH DRUM V-101 */}
             <g
               onMouseDown={(e) => handleMouseDownUnit(e, units.find((u) => u.id === 'V-101')!)}
+              onTouchStart={(e) => handleTouchStartUnit(e, units.find((u) => u.id === 'V-101')!)}
               onContextMenu={(e) => handleContextMenuUnit(e, units.find((u) => u.id === 'V-101')!)}
               className="cursor-pointer hover:opacity-95"
               transform={`translate(${v101.x}, ${v101.y})`}
@@ -858,6 +905,7 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
                   <g
                     key={u.id}
                     onMouseDown={(e) => handleMouseDownUnit(e, u)}
+                    onTouchStart={(e) => handleTouchStartUnit(e, u)}
                     onContextMenu={(e) => handleContextMenuUnit(e, u)}
                     className="cursor-pointer hover:opacity-95"
                     transform={`translate(${u.x}, ${u.y})`}

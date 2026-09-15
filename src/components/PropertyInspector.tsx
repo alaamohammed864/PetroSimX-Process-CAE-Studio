@@ -11,6 +11,7 @@ interface PropertyInspectorProps {
   onOpenSensitivityCurves: () => void;
   onExportMatrix: () => void;
   isIntegrating: boolean;
+  onClose?: () => void;
 }
 
 export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
@@ -23,6 +24,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
   onOpenSensitivityCurves,
   onExportMatrix,
   isIntegrating,
+  onClose,
 }) => {
   const [activeTab, setActiveTab] = useState<'specs' | 'kinetics' | 'catalyst'>('specs');
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
   };
 
   return (
-    <aside className="w-80 shrink-0 bg-[#171f33] border-l border-[#3d494c]/30 flex flex-col overflow-y-auto select-none">
+    <aside className="w-80 max-w-[90vw] h-full shrink-0 bg-[#171f33] border-l border-[#3d494c]/30 flex flex-col overflow-y-auto select-none">
       {/* Inspector Header */}
       <div className="p-2.5 bg-[#222a3d] flex flex-col gap-1 border-b border-[#3d494c]/30">
         <div className="flex items-center justify-between">
@@ -69,9 +71,21 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               {selectedUnit.id} SPECIFICATION
             </span>
           </div>
-          <span className="px-1.5 py-0.5 rounded bg-[#1bbd85]/20 text-[#4edea3] font-mono text-[10px] border border-[#4edea3]/30">
-            {selectedUnit.status === 'converged' ? 'CONVERGED' : selectedUnit.status.toUpperCase()}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-[#1bbd85]/20 text-[#4edea3] font-mono text-[10px] border border-[#4edea3]/30">
+              {selectedUnit.status === 'converged' ? 'CONVERGED' : selectedUnit.status.toUpperCase()}
+            </span>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1 rounded text-[#869397] hover:text-white hover:bg-[#171f33] transition-colors"
+                title="Close Inspector"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[15px]">close</span>
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between text-[10px]">
           <span className="font-mono text-[#869397] truncate">{selectedUnit.name}</span>

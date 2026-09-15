@@ -551,9 +551,9 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
       className="relative w-full h-full min-h-[500px] flex flex-col bg-[#060e20] text-[#dae2fd] select-none overflow-hidden"
     >
       {/* Top 3D Control Ribbon */}
-      <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none gap-2">
         {/* Left Toolbar: Camera Views & Render Modes */}
-        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-[#0f172a]/85 backdrop-blur-md border border-[#3d494c]/50 shadow-lg pointer-events-auto">
+        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-[#0f172a]/85 backdrop-blur-md border border-[#3d494c]/50 shadow-lg pointer-events-auto max-w-[calc(100vw-50px)] overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-1 pr-2 border-r border-[#3d494c]/40">
             <span className="material-symbols-outlined text-[#4cd7f6] text-[16px] pl-1">view_in_ar</span>
             <span className="font-bold text-[11px] text-[#dae2fd]">3D PLANT CAE</span>
@@ -826,7 +826,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
       </div>
 
       {/* Navigation Help HUD (Bottom Right) */}
-      <div className="absolute bottom-3 right-3 p-2 rounded-lg bg-[#0f172a]/85 backdrop-blur-md border border-[#3d494c]/40 font-mono text-[9.5px] text-[#869397] pointer-events-none flex items-center gap-3">
+      <div className="hidden md:flex absolute bottom-3 right-3 p-2 rounded-lg bg-[#0f172a]/85 backdrop-blur-md border border-[#3d494c]/40 font-mono text-[9.5px] text-[#869397] pointer-events-none items-center gap-3">
         <span>Orbit: <strong className="text-[#dae2fd]">Left Drag</strong></span>
         <span>•</span>
         <span>Pan: <strong className="text-[#dae2fd]">Right Drag</strong></span>
@@ -838,7 +838,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
 
       {/* Selected Entity Details Drawer (Overlay Right) */}
       {(activeUnit || activeStream) && (
-        <div className="absolute top-14 right-3 w-80 max-h-[85%] overflow-y-auto rounded-xl bg-[#0f172a]/95 backdrop-blur-lg border border-[#3d494c]/60 p-3.5 shadow-2xl font-mono text-[11px] space-y-3 pointer-events-auto">
+        <div className="absolute top-14 right-2 sm:right-3 w-80 max-w-[calc(100vw-20px)] max-h-[85%] overflow-y-auto rounded-xl bg-[#0f172a]/95 backdrop-blur-lg border border-[#3d494c]/60 p-3.5 shadow-2xl font-mono text-[11px] space-y-3 pointer-events-auto">
           {/* Header */}
           <div className="flex items-start justify-between border-b border-[#3d494c]/40 pb-2">
             <div>

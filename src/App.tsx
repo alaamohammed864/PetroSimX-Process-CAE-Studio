@@ -1008,23 +1008,34 @@ export default function App() {
               <div className="flex-1 flex w-full h-full overflow-hidden relative">
                 {/* Left Palette: Unit Operations & Components Library */}
                 {showLeftPalette ? (
-                  <div className="relative flex shrink-0 border-r border-[#3d494c]/40 z-10">
-                    <EquipmentPalette
-                      components={components}
-                      onUpdateComponentFraction={handleUpdateComponentFraction}
-                      onSelectUnitType={handleSelectUnitType}
-                      activeCategory={activePaletteCategory}
-                      onSelectCategory={setActivePaletteCategory}
-                    />
-                    <button
+                  <>
+                    {/* Mobile Backdrop */}
+                    <div
                       onClick={() => setShowLeftPalette(false)}
-                      className="absolute -right-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] flex items-center justify-center shadow-lg transition-colors"
-                      title="Hide Left Palette"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">chevron_left</span>
-                    </button>
-                  </div>
+                      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+                    />
+                    <div className="fixed inset-y-0 left-0 z-50 shadow-2xl flex flex-col lg:relative lg:static lg:z-10 lg:shadow-none lg:flex lg:shrink-0 lg:border-r lg:border-[#3d494c]/40">
+                      <EquipmentPalette
+                        components={components}
+                        onUpdateComponentFraction={handleUpdateComponentFraction}
+                        onSelectUnitType={(type) => {
+                          handleSelectUnitType(type);
+                          if (window.innerWidth < 1024) setShowLeftPalette(false);
+                        }}
+                        activeCategory={activePaletteCategory}
+                        onSelectCategory={setActivePaletteCategory}
+                        onClose={() => setShowLeftPalette(false)}
+                      />
+                      <button
+                        onClick={() => setShowLeftPalette(false)}
+                        className="hidden lg:flex absolute -right-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] items-center justify-center shadow-lg transition-colors"
+                        title="Hide Left Palette"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">chevron_left</span>
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <button
                     onClick={() => setShowLeftPalette(true)}
@@ -1076,26 +1087,34 @@ export default function App() {
 
                 {/* Right Property Inspector: Detailed specifications & kinetics */}
                 {showRightInspector ? (
-                  <div className="relative flex shrink-0 border-l border-[#3d494c]/40 z-10">
-                    <button
+                  <>
+                    {/* Mobile Backdrop */}
+                    <div
                       onClick={() => setShowRightInspector(false)}
-                      className="absolute -left-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] flex items-center justify-center shadow-lg transition-colors"
-                      title="Hide Right Inspector"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">chevron_right</span>
-                    </button>
-                    <PropertyInspector
-                      selectedUnit={selectedUnit}
-                      unitSystem={unitSystem}
-                      onUpdateEquilibrium={handleUpdateEquilibrium}
-                      onUpdateGeometry={handleUpdateGeometry}
-                      onReintegrateOde={handleReintegrateOde}
-                      onOpenSensitivityCurves={() => setIsSensitivityOpen(true)}
-                      onExportMatrix={handleExportMatrix}
-                      isIntegrating={isIntegrating}
+                      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
                     />
-                  </div>
+                    <div className="fixed inset-y-0 right-0 z-50 shadow-2xl flex flex-col lg:relative lg:static lg:z-10 lg:shadow-none lg:flex lg:shrink-0 lg:border-l lg:border-[#3d494c]/40">
+                      <button
+                        onClick={() => setShowRightInspector(false)}
+                        className="hidden lg:flex absolute -left-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] items-center justify-center shadow-lg transition-colors"
+                        title="Hide Right Inspector"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">chevron_right</span>
+                      </button>
+                      <PropertyInspector
+                        selectedUnit={selectedUnit}
+                        unitSystem={unitSystem}
+                        onUpdateEquilibrium={handleUpdateEquilibrium}
+                        onUpdateGeometry={handleUpdateGeometry}
+                        onReintegrateOde={handleReintegrateOde}
+                        onOpenSensitivityCurves={() => setIsSensitivityOpen(true)}
+                        onExportMatrix={handleExportMatrix}
+                        isIntegrating={isIntegrating}
+                        onClose={() => setShowRightInspector(false)}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <button
                     onClick={() => setShowRightInspector(true)}
