@@ -49,6 +49,19 @@ export function mapCanvasTo3D(x: number, y: number): THREE.Vector3 {
 }
 
 /**
+ * 3D plant layout coordinate mapping back to 2D canvas coordinates
+ */
+export function map3DToCanvas(posX: number, posZ: number): { x: number; y: number } {
+  const scale = 0.045;
+  const offsetX = -25;
+  const offsetZ = -10;
+  return {
+    x: Math.round((posX - offsetX) / scale),
+    y: Math.round((posZ - offsetZ) / scale),
+  };
+}
+
+/**
  * Status beacon color helper
  */
 export function getStatusColor(status: string): number {

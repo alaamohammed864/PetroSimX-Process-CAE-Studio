@@ -14,6 +14,8 @@ interface FlowsheetCanvasProps {
   unitSystem: UnitSystem;
   snapEnabled: boolean;
   onUpdateUnitPosition: (id: string, x: number, y: number) => void;
+  onConnectUnits?: (sourceId: string, targetId: string) => void;
+  onAutoLayout?: () => void;
   onOpen3DView?: () => void;
   onDeleteUnit?: (id: string) => void;
   onAddUnit?: (type: UnitType) => void;
@@ -33,6 +35,8 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   unitSystem,
   snapEnabled,
   onUpdateUnitPosition,
+  onConnectUnits,
+  onAutoLayout,
   onOpen3DView,
   onDeleteUnit,
   onAddUnit,
@@ -45,11 +49,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   const [zoom, setZoom] = useState(1.0);
   const [showFlags, setShowFlags] = useState(true);
   const [showHeatGradient, setShowHeatGradient] = useState(false);
+  const [isFlowAnimated, setIsFlowAnimated] = useState(true);
   const [orthoRouting, setOrthoRouting] = useState(true);
   const [mouseCoords, setMouseCoords] = useState({ x: 1420, y: 850 });
   const [isDraggingUnit, setIsDraggingUnit] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targetUnit: EquipmentUnit | null } | null>(null);
+  const [linkingSourceUnitId, setLinkingSourceUnitId] = useState<string | null>(null);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [quickConnectSource, setQuickConnectSource] = useState('');
+  const [quickConnectTarget, setQuickConnectTarget] = useState('');
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +83,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
   const handleMouseDownUnit = (e: React.MouseEvent, unit: EquipmentUnit) => {
     if (e.button === 2) return; // Ignore right-click for dragging
     e.stopPropagation();
+
+    // If currently in linking mode
+    if (linkingSourceUnitId && onConnectUnits) {
+      if (linkingSourceUnitId !== unit.id) {
+        onConnectUnits(linkingSourceUnitId, unit.id);
+      }
+      setLinkingSourceUnitId(null);
+      return;
+    }
+
     onSelectUnit(unit.id);
     setIsDraggingUnit(unit.id);
     if (canvasContainerRef.current) {
@@ -81,6 +100,22 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
       const clickX = (e.clientX - rect.left) / zoom;
       const clickY = (e.clientY - rect.top) / zoom;
       setDragOffset({ x: clickX - unit.x, y: clickY - unit.y });
+    }
+  };
+
+  const handlePortClick = (e: React.MouseEvent, unit: EquipmentUnit, portType: 'in' | 'out') => {
+    e.stopPropagation();
+    if (!onConnectUnits) return;
+
+    if (!linkingSourceUnitId) {
+      // Start linking from this unit
+      setLinkingSourceUnitId(unit.id);
+    } else {
+      // Complete linking to this unit
+      if (linkingSourceUnitId !== unit.id) {
+        onConnectUnits(linkingSourceUnitId, unit.id);
+      }
+      setLinkingSourceUnitId(null);
     }
   };
 
@@ -204,6 +239,46 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
             <span>GRADIENT</span>
           </button>
 
+          <button
+            onClick={() => setIsFlowAnimated(!isFlowAnimated)}
+            className={`px-2 py-1 rounded flex items-center gap-1 font-mono text-[10px] transition-colors ${
+              isFlowAnimated ? 'bg-[#1bbd85]/20 text-[#4edea3] border border-[#1bbd85]/40' : 'text-[#869397] hover:bg-[#222a3d]'
+            }`}
+            title="Toggle 2D Material Flow Particle Animation"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[15px]">
+              {isFlowAnimated ? 'motion_photos_on' : 'motion_photos_paused'}
+            </span>
+            <span>FLOW: {isFlowAnimated ? 'ANIM' : 'PAUSED'}</span>
+          </button>
+
+          {/* Quick Connect Units Button */}
+          {onConnectUnits && (
+            <button
+              onClick={() => setIsConnectModalOpen(true)}
+              className="px-2 py-1 rounded flex items-center gap-1 font-mono text-[10px] bg-[#ffb95f]/20 text-[#ffb95f] hover:bg-[#ffb95f]/30 border border-[#ffb95f]/40 transition-colors"
+              title="Connect two equipment units via process stream"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[15px]">cable</span>
+              <span>CONNECT UNITS</span>
+            </button>
+          )}
+
+          {/* Auto Layout CAD Button */}
+          {onAutoLayout && (
+            <button
+              onClick={onAutoLayout}
+              className="px-2 py-1 rounded flex items-center gap-1 font-mono text-[10px] bg-[#38bdf8]/20 text-[#38bdf8] hover:bg-[#38bdf8]/30 border border-[#38bdf8]/40 transition-colors"
+              title="Auto-arrange all 2D equipment units to prevent overlapping"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[15px]">auto_fix_high</span>
+              <span>AUTO-ALIGN</span>
+            </button>
+          )}
+
           {onOpen3DView && (
             <button
               onClick={onOpen3DView}
@@ -261,6 +336,103 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
           </div>
         </div>
 
+        {/* Interactive Stream Linking Mode Active Banner */}
+        {linkingSourceUnitId && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 bg-[#ffb95f] text-[#2c1600] px-4 py-1.5 rounded-full shadow-2xl flex items-center gap-3 font-mono text-[11px] font-bold animate-pulse">
+            <span className="material-symbols-outlined text-[16px]">cable</span>
+            <span>LINKING: Click any target equipment to connect from {linkingSourceUnitId}</span>
+            <button
+              onClick={() => setLinkingSourceUnitId(null)}
+              className="bg-[#2c1600] text-[#ffddb8] hover:text-white px-2 py-0.5 rounded text-[10px] font-mono"
+              type="button"
+            >
+              CANCEL
+            </button>
+          </div>
+        )}
+
+        {/* Quick Connect Units Dialog Modal */}
+        {isConnectModalOpen && onConnectUnits && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-96 bg-[#0f172a] border border-[#3d494c] rounded-xl shadow-2xl p-4 text-[#dae2fd] font-mono text-[11px] space-y-4">
+              <div className="flex items-center justify-between border-b border-[#3d494c]/50 pb-2">
+                <div className="flex items-center gap-2 text-[#ffb95f] font-bold text-[13px]">
+                  <span className="material-symbols-outlined text-[18px]">cable</span>
+                  <span>CONNECT EQUIPMENT UNITS</span>
+                </div>
+                <button
+                  onClick={() => setIsConnectModalOpen(false)}
+                  className="text-[#869397] hover:text-[#ffb4ab]"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-[#869397] block mb-1">SOURCE EQUIPMENT (OUTLET):</label>
+                  <select
+                    value={quickConnectSource}
+                    onChange={(e) => setQuickConnectSource(e.target.value)}
+                    className="w-full bg-[#171f33] border border-[#3d494c] rounded px-2.5 py-1.5 text-[#dae2fd] focus:outline-none"
+                  >
+                    <option value="">-- Choose Source Unit --</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.id} - {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-[#869397] block mb-1">TARGET EQUIPMENT (INLET):</label>
+                  <select
+                    value={quickConnectTarget}
+                    onChange={(e) => setQuickConnectTarget(e.target.value)}
+                    className="w-full bg-[#171f33] border border-[#3d494c] rounded px-2.5 py-1.5 text-[#dae2fd] focus:outline-none"
+                  >
+                    <option value="">-- Choose Target Unit --</option>
+                    {units
+                      .filter((u) => u.id !== quickConnectSource)
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.id} - {u.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#3d494c]/40">
+                <button
+                  onClick={() => setIsConnectModalOpen(false)}
+                  className="px-3 py-1.5 rounded bg-[#171f33] hover:bg-[#222a3d] text-[#869397] transition-colors"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (quickConnectSource && quickConnectTarget) {
+                      onConnectUnits(quickConnectSource, quickConnectTarget);
+                      setIsConnectModalOpen(false);
+                      setQuickConnectSource('');
+                      setQuickConnectTarget('');
+                    }
+                  }}
+                  disabled={!quickConnectSource || !quickConnectTarget}
+                  className="px-4 py-1.5 rounded bg-[#ffb95f] hover:bg-[#ffc98a] disabled:opacity-40 text-[#2c1600] font-bold transition-colors"
+                  type="button"
+                >
+                  Connect Pipeline
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Scaled Flowsheet Area */}
         <div
           style={{
@@ -303,6 +475,30 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
                 <stop offset="70%" stopColor="#ee9800" stopOpacity="0.8" />
                 <stop offset="100%" stopColor="#ff5722" stopOpacity="0.9" />
               </linearGradient>
+
+              {/* 2D Process Stream Fluid Motion CSS Keyframes */}
+              <style>{`
+                @keyframes processFlowAnim {
+                  from {
+                    stroke-dashoffset: 28;
+                  }
+                  to {
+                    stroke-dashoffset: 0;
+                  }
+                }
+                .flow-dash-cyan {
+                  stroke-dasharray: 6 10;
+                  animation: processFlowAnim 1.0s linear infinite;
+                }
+                .flow-dash-orange {
+                  stroke-dasharray: 6 10;
+                  animation: processFlowAnim 1.2s linear infinite;
+                }
+                .flow-dash-green {
+                  stroke-dasharray: 6 10;
+                  animation: processFlowAnim 0.9s linear infinite;
+                }
+              `}</style>
             </defs>
 
             {/* Background CAD Grid */}
@@ -324,6 +520,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-cyan)"
               className="cursor-pointer hover:stroke-[#acedff]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M 20 ${p101.y + 20} L ${p101.x} ${p101.y + 20}`}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-cyan pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-102: Pump P-101 to Exchanger E-101 Cold Side In */}
             <path
@@ -335,6 +541,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-cyan)"
               className="cursor-pointer hover:stroke-[#acedff]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${p101.x + 40} ${p101.y + 20} L ${e101.x} ${e101.y + 40}`}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-cyan pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-103: Exchanger E-101 to Furnace H-101 */}
             <path
@@ -346,6 +562,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-orange)"
               className="cursor-pointer hover:stroke-[#ffddb8]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${e101.x + 70} ${e101.y + 40} L ${h101.x} ${h101.y + 45}`}
+                fill="none"
+                stroke="#fff2dd"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-orange pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-104: Furnace H-101 to Reactor R-101 Top */}
             <path
@@ -357,6 +583,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-orange)"
               className="cursor-pointer hover:stroke-[#ffddb8]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${h101.x + 70} ${h101.y + 45} L ${r101.x - 40} ${h101.y + 45} L ${r101.x - 40} ${r101.y + 30} L ${r101.x} ${r101.y + 30}`}
+                fill="none"
+                stroke="#fff2dd"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-orange pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-105: Reactor Effluent R-101 Bottom returning to E-101 Tube Hot Side In */}
             <path
@@ -368,6 +604,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-green)"
               className="cursor-pointer hover:stroke-[#6ffbbe]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${r101.x + 40} ${r101.y + 240} L ${r101.x + 40} 380 L ${e101.x + 35} 380 L ${e101.x + 35} ${e101.y + 70}`}
+                fill="none"
+                stroke="#e8fff4"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-green pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-105b: Cooled Exchanger Effluent to Flash Drum V-101 */}
             <path
@@ -377,6 +623,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               strokeWidth="2.5"
               markerEnd="url(#stream-arrow-cyan)"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${e101.x + 35} ${e101.y} L ${e101.x + 35} 120 L ${v101.x + 10} 120 L ${v101.x + 10} ${v101.y + 30}`}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-cyan pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-106: Overhead Vapor (Recycle gas) from V-101 */}
             <path
@@ -389,6 +645,16 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-cyan)"
               className="cursor-pointer hover:stroke-white"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${v101.x + 30} ${v101.y} L ${v101.x + 30} 70 L 80 70 L 80 ${p101.y} L ${p101.x} ${p101.y}`}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-cyan pointer-events-none opacity-90"
+              />
+            )}
 
             {/* Stream S-107: Bottoms Product from V-101 */}
             <path
@@ -400,6 +666,75 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
               markerEnd="url(#stream-arrow-orange)"
               className="cursor-pointer hover:stroke-[#ffddb8]"
             ></path>
+            {isFlowAnimated && (
+              <path
+                d={`M ${v101.x + 30} ${v101.y + 120} L ${v101.x + 30} 370 L 850 370`}
+                fill="none"
+                stroke="#fff2dd"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="flow-dash-orange pointer-events-none opacity-90"
+              />
+            )}
+
+            {/* ================= DYNAMIC PROCESS STREAMS (User Request) ================= */}
+            {streams
+              .filter((s) => !['S-101', 'S-102', 'S-103', 'S-104', 'S-105', 'S-106', 'S-107'].includes(s.id))
+              .map((s) => {
+                const src = units.find((u) => u.outletStreamIds?.includes(s.id));
+                const tgt = units.find((u) => u.inletStreamIds?.includes(s.id));
+                if (!src || !tgt) return null;
+
+                const srcWidth = src.width || (src.id === 'R-101' ? 70 : src.id === 'E-101' ? 70 : src.id === 'H-101' ? 70 : src.id === 'V-101' ? 60 : 40);
+                const srcHeight = src.height || (src.id === 'R-101' ? 240 : 60);
+                const tgtHeight = tgt.height || (tgt.id === 'R-101' ? 240 : 60);
+
+                const startX = src.x + srcWidth;
+                const startY = src.y + Math.round(srcHeight / 2);
+                const endX = tgt.x;
+                const endY = tgt.y + Math.round(tgtHeight / 2);
+
+                const midX = Math.round((startX + endX) / 2);
+                const isSelected = selectedStreamId === s.id;
+                const pathD = orthoRouting
+                  ? `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`
+                  : `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+
+                return (
+                  <g key={s.id}>
+                    <path
+                      onClick={() => onSelectStream(s.id)}
+                      d={pathD}
+                      fill="none"
+                      stroke={isSelected ? '#acedff' : (s.color || '#4cd7f6')}
+                      strokeWidth={isSelected ? 3.5 : 2.5}
+                      markerEnd="url(#stream-arrow-cyan)"
+                      className="cursor-pointer hover:stroke-[#acedff]"
+                    />
+                    {isFlowAnimated && (
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke="#ffffff"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        className="flow-dash-cyan pointer-events-none opacity-90"
+                      />
+                    )}
+                    {/* Stream Tag Badge in middle of pipe */}
+                    <g
+                      onClick={() => onSelectStream(s.id)}
+                      className="cursor-pointer"
+                      transform={`translate(${midX}, ${Math.round((startY + endY) / 2)})`}
+                    >
+                      <rect x="-18" y="-9" width="36" height="18" rx="4" fill="#0f172a" stroke={s.color || '#4cd7f6'} strokeWidth="1" />
+                      <text x="0" y="3.5" fill="#dae2fd" fontFamily="JetBrains Mono" fontSize="8.5" fontWeight="bold" textAnchor="middle">
+                        {s.id}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
 
             {/* ================= UNIT OPERATION BLOCKS (CAD SCHEMATICS) ================= */}
 
@@ -629,6 +964,38 @@ export const FlowsheetCanvas: React.FC<FlowsheetCanvasProps> = ({
                     >
                       {u.name.length > 14 ? u.name.slice(0, 14) + '…' : u.name}
                     </text>
+
+                    {/* Inlet Port Connection Point (Left Side) */}
+                    <g
+                      onClick={(e) => handlePortClick(e, u, 'in')}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={0}
+                        cy={((u.height || 60) / 2)}
+                        r={linkingSourceUnitId ? 6 : 4}
+                        fill={linkingSourceUnitId ? '#4cd7f6' : '#0b1326'}
+                        stroke="#4cd7f6"
+                        strokeWidth="1.8"
+                      />
+                      <title>Inlet Port (Click to connect pipeline)</title>
+                    </g>
+
+                    {/* Outlet Port Connection Point (Right Side) */}
+                    <g
+                      onClick={(e) => handlePortClick(e, u, 'out')}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={u.width || 60}
+                        cy={((u.height || 60) / 2)}
+                        r={linkingSourceUnitId === u.id ? 6 : 4}
+                        fill={linkingSourceUnitId === u.id ? '#ffb95f' : '#0b1326'}
+                        stroke="#ffb95f"
+                        strokeWidth="1.8"
+                      />
+                      <title>Outlet Port (Click to link stream from this unit)</title>
+                    </g>
                   </g>
                 );
               })}

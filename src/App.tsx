@@ -125,6 +125,27 @@ export default function App() {
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
 
+  // Workspace Panels Visibility Controls (User Request)
+  const [showHeader, setShowHeader] = useState<boolean>(true);
+  const [showBottomConsole, setShowBottomConsole] = useState<boolean>(true);
+  const [showLeftPalette, setShowLeftPalette] = useState<boolean>(true);
+  const [showRightInspector, setShowRightInspector] = useState<boolean>(true);
+
+  const isZenMode = !showHeader && !showBottomConsole && !showLeftPalette && !showRightInspector;
+  const toggleZenMode = useCallback(() => {
+    if (isZenMode) {
+      setShowHeader(true);
+      setShowBottomConsole(true);
+      setShowLeftPalette(true);
+      setShowRightInspector(true);
+    } else {
+      setShowHeader(false);
+      setShowBottomConsole(false);
+      setShowLeftPalette(false);
+      setShowRightInspector(false);
+    }
+  }, [isZenMode]);
+
   // Auto-Save and Crash Recovery
   const {
     pendingRecovery,
@@ -265,14 +286,33 @@ export default function App() {
     const count = units.filter((u) => u.type === type).length + 1;
     const newId = `${prefix}-10${count + 1}`;
 
+    // Calculate smart non-overlapping placement
+    let smartX = 100;
+    let smartY = 180;
+    if (units.length > 0) {
+      let maxX = 0;
+      units.forEach((u) => {
+        if (u.x > maxX) maxX = u.x;
+      });
+
+      if (maxX + 170 < 1100) {
+        smartX = maxX + 140;
+        smartY = 180 + ((units.length % 3) * 35);
+      } else {
+        const row = Math.floor(units.length / 5);
+        smartX = 100 + ((units.length % 5) * 150);
+        smartY = 180 + (row * 180);
+      }
+    }
+
     const newUnit: EquipmentUnit = {
       id: newId,
       name: `${type.toUpperCase().replace(/_/g, ' ')} ${newId}`,
       tag: newId,
       type: type,
       description: `Process CAE ${type} unit operation`,
-      x: 350 + Math.random() * 80,
-      y: 240 + Math.random() * 60,
+      x: smartX,
+      y: smartY,
       width: type === 'column' || type === 'absorber' || type === 'stripper' ? 60 : 70,
       height: type === 'column' || type === 'absorber' || type === 'stripper' ? 120 : 70,
       status: 'converged',
@@ -389,6 +429,100 @@ export default function App() {
       },
     ]);
   }, [streams]);
+
+  // Connect two units with a new process stream (User Request: Stream linking)
+  const handleConnectUnits = useCallback((sourceUnitId: string, targetUnitId: string) => {
+    if (!sourceUnitId || !targetUnitId || sourceUnitId === targetUnitId) return;
+
+    const streamNumber = streams.length + 1;
+    const newStreamId = `S-10${streamNumber}`;
+
+    const sourceUnit = units.find((u) => u.id === sourceUnitId);
+    const tempC = sourceUnit?.equilibrium.outletTempC || 120;
+    const presBar = sourceUnit?.equilibrium.operatingPresBar || 30;
+
+    const newStream: ProcessStream = {
+      id: newStreamId,
+      name: `${sourceUnitId} ➜ ${targetUnitId}`,
+      tag: newStreamId,
+      phase: tempC > 150 ? 'Vapor' : 'Liquid',
+      tempC: parseFloat(tempC.toFixed(1)),
+      presBar: parseFloat(presBar.toFixed(1)),
+      flowKgH: 22000.0,
+      mw: 44.0,
+      enthalpyKjKg: 120.0,
+      vaporFraction: tempC > 150 ? 1.0 : 0.0,
+      densityKgM3: tempC > 150 ? 18.5 : 720.0,
+      color: '#4cd7f6',
+      compositions: { c1: 0.2, c3: 0.3, nc4: 0.3, h2: 0.2, c6h6: 0, c7h14: 0 },
+    };
+
+    setStreams((prev) => [...prev, newStream]);
+
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.id === sourceUnitId) {
+          return {
+            ...u,
+            outletStreamIds: Array.from(new Set([...(u.outletStreamIds || []), newStreamId])),
+          };
+        }
+        if (u.id === targetUnitId) {
+          return {
+            ...u,
+            inletStreamIds: Array.from(new Set([...(u.inletStreamIds || []), newStreamId])),
+          };
+        }
+        return u;
+      })
+    );
+
+    setSelectedStreamId(newStreamId);
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `log-${Date.now()}-conn`,
+        time: new Date().toTimeString().split(' ')[0],
+        type: 'success',
+        message: `Connected ${sourceUnitId} ➜ ${targetUnitId} via stream ${newStreamId}. Updated 2D flowsheet & 3D plant model.`,
+      },
+    ]);
+  }, [streams, units]);
+
+  // CAD Auto-Layout to eliminate overlapping
+  const handleAutoLayout = useCallback(() => {
+    let currentX = 80;
+    let currentY = 180;
+    setUnits((prev) =>
+      prev.map((u) => {
+        const uWidth = u.width || 70;
+        const assignedX = currentX;
+        const assignedY = currentY;
+
+        currentX += uWidth + 90;
+        if (currentX > 1050) {
+          currentX = 80;
+          currentY += 190;
+        }
+
+        return {
+          ...u,
+          x: assignedX,
+          y: assignedY,
+        };
+      })
+    );
+
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: `log-${Date.now()}-layout`,
+        time: new Date().toTimeString().split(' ')[0],
+        type: 'info',
+        message: `Applied CAD auto-layout: Rearranged all units with zero overlapping.`,
+      },
+    ]);
+  }, []);
 
   // Trigger Solver execution
   const handleSolve = useCallback(async () => {
@@ -788,33 +922,48 @@ export default function App() {
   }, [handleSolve, handleSaveProject]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#060e20] text-[#dae2fd] font-sans antialiased">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#060e20] text-[#dae2fd] font-sans antialiased relative">
       {/* Top Engineering Ribbon / Header */}
-      <Header
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        unitSystem={unitSystem}
-        onUnitSystemChange={setUnitSystem}
-        isSolving={isSolving}
-        onSolve={handleSolve}
-        onPause={handlePause}
-        onStep={handleStep}
-        onClearDiagnostics={handleClearDiagnostics}
-        onOpenUnitConverter={() => setIsConverterOpen(true)}
-        onNewProject={handleNewProject}
-        onOpenProject={handleOpenProject}
-        onSaveProject={handleSaveProject}
-        onOpenProjectManager={() => setIsProjectManagerOpen(true)}
-        onOpenShortcuts={() => setIsShortcutsOpen(true)}
-        projectName={currentProject.name}
-        onAddUnit={handleAddUnit}
-        onAddStream={handleAddStream}
-        snapEnabled={snapEnabled}
-        onToggleSnap={() => setSnapEnabled(!snapEnabled)}
-        onFitView={handleFitView}
-        equationOfState={eos}
-        onChangeEos={setEos}
-      />
+      {showHeader && (
+        <Header
+          currentTab={currentTab}
+          onTabChange={setCurrentTab}
+          unitSystem={unitSystem}
+          onUnitSystemChange={setUnitSystem}
+          isSolving={isSolving}
+          onSolve={handleSolve}
+          onPause={handlePause}
+          onStep={handleStep}
+          onClearDiagnostics={handleClearDiagnostics}
+          onOpenUnitConverter={() => setIsConverterOpen(true)}
+          onNewProject={handleNewProject}
+          onOpenProject={handleOpenProject}
+          onSaveProject={handleSaveProject}
+          onOpenProjectManager={() => setIsProjectManagerOpen(true)}
+          onOpenShortcuts={() => setIsShortcutsOpen(true)}
+          projectName={currentProject.name}
+          onAddUnit={handleAddUnit}
+          onAddStream={handleAddStream}
+          snapEnabled={snapEnabled}
+          onToggleSnap={() => setSnapEnabled(!snapEnabled)}
+          onFitView={handleFitView}
+          equationOfState={eos}
+          onChangeEos={setEos}
+        />
+      )}
+
+      {/* Floating Reveal Button when Header is hidden */}
+      {!showHeader && (
+        <button
+          onClick={() => setShowHeader(true)}
+          className="fixed top-2.5 right-4 z-50 px-2.5 py-1 rounded-md bg-[#171f33]/95 hover:bg-[#222a3d] border border-[#4cd7f6]/40 text-[#4cd7f6] text-[11px] font-mono shadow-2xl backdrop-blur flex items-center gap-1.5 transition-all"
+          title="Show Top Engineering Suite Header"
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[14px]">expand_more</span>
+          <span>SHOW HEADER</span>
+        </button>
+      )}
 
       {/* Unsaved Session / Crash Recovery Notification Banner */}
       {pendingRecovery && (
@@ -853,66 +1002,112 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.15, ease: 'easeInOut' }}
-            className="flex-1 flex w-full h-full overflow-hidden"
+            className="flex-1 flex w-full h-full overflow-hidden relative"
           >
             {currentTab === 'flowsheet-canvas' && (
-          <div className="flex-1 flex w-full h-full overflow-hidden">
-            {/* Left Palette: Unit Operations & Components Library */}
-            <EquipmentPalette
-              components={components}
-              onUpdateComponentFraction={handleUpdateComponentFraction}
-              onSelectUnitType={handleSelectUnitType}
-              activeCategory={activePaletteCategory}
-              onSelectCategory={setActivePaletteCategory}
-            />
+              <div className="flex-1 flex w-full h-full overflow-hidden relative">
+                {/* Left Palette: Unit Operations & Components Library */}
+                {showLeftPalette ? (
+                  <div className="relative flex shrink-0 border-r border-[#3d494c]/40 z-10">
+                    <EquipmentPalette
+                      components={components}
+                      onUpdateComponentFraction={handleUpdateComponentFraction}
+                      onSelectUnitType={handleSelectUnitType}
+                      activeCategory={activePaletteCategory}
+                      onSelectCategory={setActivePaletteCategory}
+                    />
+                    <button
+                      onClick={() => setShowLeftPalette(false)}
+                      className="absolute -right-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] flex items-center justify-center shadow-lg transition-colors"
+                      title="Hide Left Palette"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">chevron_left</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowLeftPalette(true)}
+                    className="absolute left-0 top-12 z-30 bg-[#171f33]/95 hover:bg-[#222a3d] text-[#4cd7f6] border border-[#3d494c]/60 rounded-r-md px-1.5 py-3 shadow-xl flex items-center justify-center transition-all backdrop-blur"
+                    title="Show Equipment Palette (Left Panel)"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+                  </button>
+                )}
 
-            {/* Central Engineering CAD Canvas */}
-            <FlowsheetCanvas
-              units={units}
-              streams={streams}
-              selectedUnitId={selectedUnitId}
-              onSelectUnit={(id) => {
-                setSelectedUnitId(id);
-                setSelectedStreamId(null);
-              }}
-              selectedStreamId={selectedStreamId}
-              onSelectStream={(id) => {
-                setSelectedStreamId(id);
-              }}
-              unitSystem={unitSystem}
-              snapEnabled={snapEnabled}
-              onUpdateUnitPosition={handleUpdateUnitPosition}
-              onOpen3DView={() => setCurrentTab('3d-plant-view')}
-              onDeleteUnit={(id) => {
-                setUnits((prev) => prev.filter((u) => u.id !== id));
-                if (selectedUnitId === id) setSelectedUnitId('');
-              }}
-              onAddUnit={handleSelectUnitType}
-              onAddStream={handleAddStream}
-              onSolveFlowsheet={handleSolve}
-              onViewProfiles={(id) => {
-                setSelectedUnitId(id);
-                setCurrentTab('reactor-engineering');
-              }}
-              onViewHydraulics={(id) => {
-                setSelectedUnitId(id);
-                setCurrentTab('column-design');
-              }}
-            />
+                {/* Central Engineering CAD Canvas */}
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col relative overflow-hidden">
+                  <FlowsheetCanvas
+                    units={units}
+                    streams={streams}
+                    selectedUnitId={selectedUnitId}
+                    onSelectUnit={(id) => {
+                      setSelectedUnitId(id);
+                      setSelectedStreamId(null);
+                    }}
+                    selectedStreamId={selectedStreamId}
+                    onSelectStream={(id) => {
+                      setSelectedStreamId(id);
+                    }}
+                    unitSystem={unitSystem}
+                    snapEnabled={snapEnabled}
+                    onUpdateUnitPosition={handleUpdateUnitPosition}
+                    onConnectUnits={handleConnectUnits}
+                    onAutoLayout={handleAutoLayout}
+                    onOpen3DView={() => setCurrentTab('3d-plant-view')}
+                    onDeleteUnit={(id) => {
+                      setUnits((prev) => prev.filter((u) => u.id !== id));
+                      if (selectedUnitId === id) setSelectedUnitId('');
+                    }}
+                    onAddUnit={handleSelectUnitType}
+                    onAddStream={handleAddStream}
+                    onSolveFlowsheet={handleSolve}
+                    onViewProfiles={(id) => {
+                      setSelectedUnitId(id);
+                      setCurrentTab('reactor-engineering');
+                    }}
+                    onViewHydraulics={(id) => {
+                      setSelectedUnitId(id);
+                      setCurrentTab('column-design');
+                    }}
+                  />
+                </div>
 
-            {/* Right Property Inspector: Detailed specifications & kinetics */}
-            <PropertyInspector
-              selectedUnit={selectedUnit}
-              unitSystem={unitSystem}
-              onUpdateEquilibrium={handleUpdateEquilibrium}
-              onUpdateGeometry={handleUpdateGeometry}
-              onReintegrateOde={handleReintegrateOde}
-              onOpenSensitivityCurves={() => setIsSensitivityOpen(true)}
-              onExportMatrix={handleExportMatrix}
-              isIntegrating={isIntegrating}
-            />
-          </div>
-        )}
+                {/* Right Property Inspector: Detailed specifications & kinetics */}
+                {showRightInspector ? (
+                  <div className="relative flex shrink-0 border-l border-[#3d494c]/40 z-10">
+                    <button
+                      onClick={() => setShowRightInspector(false)}
+                      className="absolute -left-3 top-2.5 z-20 w-6 h-6 rounded-full bg-[#171f33] border border-[#3d494c]/60 text-[#869397] hover:text-[#4cd7f6] flex items-center justify-center shadow-lg transition-colors"
+                      title="Hide Right Inspector"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">chevron_right</span>
+                    </button>
+                    <PropertyInspector
+                      selectedUnit={selectedUnit}
+                      unitSystem={unitSystem}
+                      onUpdateEquilibrium={handleUpdateEquilibrium}
+                      onUpdateGeometry={handleUpdateGeometry}
+                      onReintegrateOde={handleReintegrateOde}
+                      onOpenSensitivityCurves={() => setIsSensitivityOpen(true)}
+                      onExportMatrix={handleExportMatrix}
+                      isIntegrating={isIntegrating}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowRightInspector(true)}
+                    className="absolute right-0 top-12 z-30 bg-[#171f33]/95 hover:bg-[#222a3d] text-[#4cd7f6] border border-[#3d494c]/60 rounded-l-md px-1.5 py-3 shadow-xl flex items-center justify-center transition-all backdrop-blur"
+                    title="Show Property Inspector (Right Panel)"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">chevron_left</span>
+                  </button>
+                )}
+              </div>
+            )}
 
         {currentTab === '3d-plant-view' && (
           <div className="flex-1 overflow-hidden bg-[#060e20] flex flex-col relative">
@@ -936,6 +1131,10 @@ export default function App() {
                     }
                   }
                 }}
+                onUpdateUnitPosition={handleUpdateUnitPosition}
+                onConnectUnits={handleConnectUnits}
+                onAddUnit={handleSelectUnitType}
+                onAutoLayout={handleAutoLayout}
                 unitSystem={unitSystem}
               />
             </Suspense>
@@ -1051,27 +1250,118 @@ export default function App() {
       </main>
 
       {/* Bottom Diagnostic Console & Solver Matrix Dock */}
-      <DiagnosticConsole
-        logs={logs}
-        streams={streams}
-        components={components}
-        unitSystem={unitSystem}
-        selectedStreamId={selectedStreamId}
-        onSelectStream={(id) => {
-          setSelectedStreamId(id);
-          setSelectedUnitId('');
-        }}
-        massResidual={massResidual}
-        energyResidual={energyResidual}
-        convergenceHistory={convergenceHistory}
-        isSolving={isSolving}
-        engineeringReport={engineeringReport}
-        validationReport={validationReport}
-        simulationResult={simulationResult}
-        units={units}
-        onTriggerSolve={handleSolve}
-        onOpenReportsStudio={() => setCurrentTab('engineering-reports')}
-      />
+      {showBottomConsole ? (
+        <DiagnosticConsole
+          logs={logs}
+          streams={streams}
+          components={components}
+          unitSystem={unitSystem}
+          selectedStreamId={selectedStreamId}
+          onSelectStream={(id) => {
+            setSelectedStreamId(id);
+            setSelectedUnitId('');
+          }}
+          massResidual={massResidual}
+          energyResidual={energyResidual}
+          convergenceHistory={convergenceHistory}
+          isSolving={isSolving}
+          engineeringReport={engineeringReport}
+          validationReport={validationReport}
+          simulationResult={simulationResult}
+          units={units}
+          onTriggerSolve={handleSolve}
+          onOpenReportsStudio={() => setCurrentTab('engineering-reports')}
+        />
+      ) : (
+        <div className="bg-[#0b1326] border-t border-[#3d494c]/50 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono shrink-0 select-none z-30 shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse" />
+              <span className="text-[#869397]">SOLVER:</span>
+              <span className="text-[#4edea3] font-semibold">ONLINE (STEADY-STATE CONVERGED)</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-[#bcc9cd]">
+              <span className="text-[#869397]">RESIDUAL:</span>
+              <span className="text-[#4cd7f6]">{massResidual.toExponential(2)} kg/h</span>
+            </div>
+            <div className="hidden md:flex items-center gap-2 text-[#bcc9cd]">
+              <span className="text-[#869397]">LEAD ENG:</span>
+              <span className="text-[#ffb95f] font-bold">ENG ALAA MOHAMMED</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowBottomConsole(true)}
+            className="px-2.5 py-0.5 rounded bg-[#171f33] hover:bg-[#222a3d] text-[#4cd7f6] border border-[#4cd7f6]/40 flex items-center gap-1.5 text-[10.5px] transition-all"
+            title="Open Diagnostic Console & Process Stream Summary"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[14px]">expand_less</span>
+            <span>SHOW DIAGNOSTIC CONSOLE</span>
+          </button>
+        </div>
+      )}
+
+      {/* Floating Workspace Panels Visibility Manager Dock */}
+      <div className="fixed bottom-12 right-4 z-40 flex items-center gap-1 bg-[#171f33]/95 border border-[#3d494c]/60 shadow-2xl rounded-lg px-2 py-1 backdrop-blur-md text-[10px] font-mono">
+        <span className="text-[#869397] font-semibold flex items-center gap-1 mr-1">
+          <span className="material-symbols-outlined text-[14px] text-[#4cd7f6]">dashboard_customize</span>
+          <span className="hidden sm:inline">PANELS:</span>
+        </span>
+        <button
+          onClick={() => setShowHeader(!showHeader)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            showHeader ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] border border-[#4cd7f6]/40' : 'text-[#869397] hover:text-[#dae2fd]'
+          }`}
+          title={showHeader ? 'Hide Top Header' : 'Show Top Header'}
+          type="button"
+        >
+          TOP
+        </button>
+        <button
+          onClick={() => setShowLeftPalette(!showLeftPalette)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            showLeftPalette ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] border border-[#4cd7f6]/40' : 'text-[#869397] hover:text-[#dae2fd]'
+          }`}
+          title={showLeftPalette ? 'Hide Left Palette' : 'Show Left Palette'}
+          type="button"
+        >
+          LEFT
+        </button>
+        <button
+          onClick={() => setShowRightInspector(!showRightInspector)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            showRightInspector ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] border border-[#4cd7f6]/40' : 'text-[#869397] hover:text-[#dae2fd]'
+          }`}
+          title={showRightInspector ? 'Hide Right Inspector' : 'Show Right Inspector'}
+          type="button"
+        >
+          RIGHT
+        </button>
+        <button
+          onClick={() => setShowBottomConsole(!showBottomConsole)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            showBottomConsole ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] border border-[#4cd7f6]/40' : 'text-[#869397] hover:text-[#dae2fd]'
+          }`}
+          title={showBottomConsole ? 'Hide Bottom Console' : 'Show Bottom Console'}
+          type="button"
+        >
+          BOTTOM
+        </button>
+        <div className="w-px h-3 bg-[#3d494c]/60 mx-0.5"></div>
+        <button
+          onClick={toggleZenMode}
+          className={`px-2 py-0.5 rounded font-bold transition-colors flex items-center gap-1 ${
+            isZenMode ? 'bg-[#ffb95f] text-[#2c1600]' : 'bg-[#222a3d] text-[#dae2fd] hover:text-[#ffb95f]'
+          }`}
+          title={isZenMode ? 'Exit Zen Focus Mode (Restore All Panels)' : 'Enter Zen Focus Mode (Maximize Canvas)'}
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[13px]">
+            {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
+          </span>
+          <span>{isZenMode ? 'RESTORE' : 'FOCUS'}</span>
+        </button>
+      </div>
 
       {/* Sensitivity Analysis Modal */}
       {isSensitivityOpen && selectedUnit && (

@@ -270,7 +270,7 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
 
       {/* Dock Content Area */}
       {!isCollapsed && (
-        <div className="bg-[#060e20] p-2">
+        <div className="bg-[#060e20] p-2 max-h-52 overflow-y-auto">
           {/* 1. SOLVER DIAGNOSTICS TAB */}
           {activeTab === 'solver' && (
             <div className="grid grid-cols-12 gap-2">

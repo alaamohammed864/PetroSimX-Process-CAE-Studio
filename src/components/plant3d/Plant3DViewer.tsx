@@ -91,6 +91,10 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
   selectedStreamId,
   onSelectUnit,
   onSelectStream,
+  onUpdateUnitPosition,
+  onConnectUnits,
+  onAddUnit,
+  onAutoLayout,
   unitSystem,
   dynamicState,
   onClose,
@@ -108,6 +112,9 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
   const [hoveredEntity, setHoveredEntity] = useState<{ type: 'unit' | 'stream'; id: string; name: string } | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [canvasKey, setCanvasKey] = useState<number>(0);
+  const [moveStepMeters, setMoveStepMeters] = useState<number>(1.0);
+  const [targetUnitToConnect, setTargetUnitToConnect] = useState<string>('');
+  const [isAddBlockMenuOpen, setIsAddBlockMenuOpen] = useState<boolean>(false);
 
   // References for Three.js engine
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -168,6 +175,16 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     camera.position.set(unitPos.x - 6, unitPos.y + 5, unitPos.z + 8);
     controls.update();
   }, []);
+
+  // Move unit in 3D space by delta meters and sync back to 2D canvas
+  const handleMoveUnit3D = useCallback((deltaX3D: number, deltaZ3D: number) => {
+    if (!activeUnit || !onUpdateUnitPosition) return;
+    const deltaCanvasX = Math.round(deltaX3D / 0.045);
+    const deltaCanvasY = Math.round(deltaZ3D / 0.045);
+    const newX = Math.max(30, activeUnit.x + deltaCanvasX);
+    const newY = Math.max(30, activeUnit.y + deltaCanvasY);
+    onUpdateUnitPosition(activeUnit.id, newX, newY);
+  }, [activeUnit, onUpdateUnitPosition]);
 
   // Update selection highlight box
   useEffect(() => {
@@ -306,7 +323,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     particlesRef.current = [];
 
     // Particle geometry & shared material for flow visualization
-    const particleGeo = new THREE.SphereGeometry(0.12, 12, 12);
+    const particleGeo = new THREE.SphereGeometry(0.22, 16, 16);
 
     streams.forEach((stream) => {
       // Find source unit (which has this stream in outletStreamIds)
@@ -331,20 +348,24 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
           scene.add(mesh);
           pipeMeshesRef.current.set(stream.id, { mesh, path });
 
-          // Add animated flow particles along the pipe
+          // Add animated high-visibility luminous flow particles along the pipe
           const particleColor = getStreamColor(stream, colorMode);
-          const particleMat = new THREE.MeshBasicMaterial({
+          const particleMat = new THREE.MeshStandardMaterial({
             color: particleColor,
+            emissive: particleColor,
+            emissiveIntensity: 0.95,
+            roughness: 0.2,
+            metalness: 0.3,
           });
 
-          // 2 particles spaced along the pipe run
-          const numParticles = 2;
+          // 4 particles spaced along the pipe run for continuous fluid flow visualization
+          const numParticles = 4;
           for (let p = 0; p < numParticles; p++) {
             const particleMesh = new THREE.Mesh(particleGeo, particleMat);
             scene.add(particleMesh);
 
             // Flow speed proportional to mass flow rate
-            const speed = Math.max(0.0015, Math.min(0.008, (stream.flowKgH / 50000) * 0.004));
+            const speed = Math.max(0.002, Math.min(0.01, (stream.flowKgH / 50000) * 0.005));
 
             particlesRef.current.push({
               mesh: particleMesh,
@@ -645,6 +666,61 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
               Focus {selectedUnitId}
             </button>
           )}
+
+          {/* Add 3D Block Dropdown */}
+          {onAddUnit && (
+            <div className="relative">
+              <button
+                onClick={() => setIsAddBlockMenuOpen(!isAddBlockMenuOpen)}
+                className="px-2 py-1 text-[10.5px] font-bold font-mono rounded bg-[#4edea3]/20 text-[#4edea3] border border-[#4edea3]/40 hover:bg-[#4edea3]/30 transition-colors flex items-center gap-1"
+                title="Insert New 3D Equipment Block"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[14px]">add_box</span>
+                <span>+ ADD 3D BLOCK</span>
+              </button>
+              {isAddBlockMenuOpen && (
+                <div className="absolute top-full mt-1.5 left-0 w-48 bg-[#0f172a] border border-[#3d494c] rounded-lg shadow-2xl py-1 z-30 font-mono text-[10.5px]">
+                  {[
+                    { type: 'reactor', label: 'Catalytic Reactor' },
+                    { type: 'column', label: 'Distillation Column' },
+                    { type: 'vessel', label: 'Flash Drum / Vessel' },
+                    { type: 'heatex', label: 'Heat Exchanger' },
+                    { type: 'furnace', label: 'Process Furnace' },
+                    { type: 'pump', label: 'Feed Pump' },
+                    { type: 'compressor', label: 'Compressor' },
+                    { type: 'three_phase_separator', label: '3-Phase Separator' },
+                    { type: 'valve', label: 'Control Valve' },
+                  ].map((item) => (
+                    <button
+                      key={item.type}
+                      onClick={() => {
+                        onAddUnit(item.type as any);
+                        setIsAddBlockMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-[#1e293b] text-[#dae2fd] hover:text-[#4cd7f6] transition-colors"
+                      type="button"
+                    >
+                      + {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Auto Align CAD button */}
+          {onAutoLayout && (
+            <button
+              onClick={onAutoLayout}
+              className="px-2 py-1 text-[10.5px] font-mono rounded bg-[#ffb95f]/20 text-[#ffb95f] border border-[#ffb95f]/40 hover:bg-[#ffb95f]/30 transition-colors flex items-center gap-1"
+              title="Auto-arrange all 3D units with zero overlapping"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[13px]">auto_fix_high</span>
+              <span>AUTO-ALIGN</span>
+            </button>
+          )}
         </div>
 
         {/* Right Toolbar: Close button if modal */}
@@ -869,6 +945,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
                       key={sid}
                       onClick={() => onSelectStream?.(sid)}
                       className="px-1.5 py-0.5 rounded bg-[#171f33] border border-[#3d494c]/40 text-[#4cd7f6] hover:bg-[#222a3d]"
+                      type="button"
                     >
                       In: {sid}
                     </button>
@@ -878,12 +955,136 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
                       key={sid}
                       onClick={() => onSelectStream?.(sid)}
                       className="px-1.5 py-0.5 rounded bg-[#171f33] border border-[#3d494c]/40 text-[#ffddb8] hover:bg-[#222a3d]"
+                      type="button"
                     >
                       Out: {sid}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* 3D Spatial Position & Movement Controller (User Request) */}
+              {onUpdateUnitPosition && (
+                <div className="p-2.5 rounded-lg bg-[#171f33] border border-[#4cd7f6]/30 space-y-2 text-[10.5px]">
+                  <div className="flex items-center justify-between font-bold text-[#4cd7f6]">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">open_with</span>
+                      <span>3D SPATIAL POSITION</span>
+                    </span>
+                    <span className="text-[9.5px] text-[#bcc9cd]">
+                      [{(activeUnit.x * 0.045 - 25).toFixed(1)}m, {(activeUnit.y * 0.045 - 10).toFixed(1)}m]
+                    </span>
+                  </div>
+
+                  {/* Step Distance Selector */}
+                  <div className="flex items-center justify-between text-[10px] text-[#869397]">
+                    <span>Step Distance:</span>
+                    <div className="flex gap-1">
+                      {[0.5, 1.0, 2.5].map((step) => (
+                        <button
+                          key={step}
+                          onClick={() => setMoveStepMeters(step)}
+                          className={`px-1.5 py-0.5 rounded ${
+                            moveStepMeters === step
+                              ? 'bg-[#4cd7f6] text-[#003640] font-bold'
+                              : 'bg-[#222a3d] text-[#dae2fd] hover:bg-[#2e3950]'
+                          }`}
+                          type="button"
+                        >
+                          {step}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* D-Pad Movement Controller */}
+                  <div className="flex flex-col items-center gap-1 py-1">
+                    <button
+                      onClick={() => handleMoveUnit3D(0, -moveStepMeters)}
+                      className="w-20 py-1 bg-[#222a3d] hover:bg-[#4cd7f6]/20 hover:text-[#4cd7f6] border border-[#3d494c] rounded flex items-center justify-center gap-1 font-mono text-[10px]"
+                      title="Move North (-Z)"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                      <span>NORTH</span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleMoveUnit3D(-moveStepMeters, 0)}
+                        className="w-20 py-1 bg-[#222a3d] hover:bg-[#4cd7f6]/20 hover:text-[#4cd7f6] border border-[#3d494c] rounded flex items-center justify-center gap-1 font-mono text-[10px]"
+                        title="Move West (-X)"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+                        <span>WEST</span>
+                      </button>
+                      <div className="w-8 h-8 rounded-full bg-[#0b1326] border border-[#4cd7f6]/40 flex items-center justify-center text-[#4cd7f6] font-bold text-[9px]">
+                        3D
+                      </div>
+                      <button
+                        onClick={() => handleMoveUnit3D(moveStepMeters, 0)}
+                        className="w-20 py-1 bg-[#222a3d] hover:bg-[#4cd7f6]/20 hover:text-[#4cd7f6] border border-[#3d494c] rounded flex items-center justify-center gap-1 font-mono text-[10px]"
+                        title="Move East (+X)"
+                        type="button"
+                      >
+                        <span>EAST</span>
+                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleMoveUnit3D(0, moveStepMeters)}
+                      className="w-20 py-1 bg-[#222a3d] hover:bg-[#4cd7f6]/20 hover:text-[#4cd7f6] border border-[#3d494c] rounded flex items-center justify-center gap-1 font-mono text-[10px]"
+                      title="Move South (+Z)"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                      <span>SOUTH</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Connect 3D Pipeline Tool (User Request) */}
+              {onConnectUnits && (
+                <div className="p-2.5 rounded-lg bg-[#171f33] border border-[#ffb95f]/30 space-y-2 text-[10.5px]">
+                  <div className="flex items-center gap-1 font-bold text-[#ffb95f]">
+                    <span className="material-symbols-outlined text-[15px]">cable</span>
+                    <span>CONNECT PIPELINE TO UNIT</span>
+                  </div>
+                  <div className="text-[10px] text-[#869397]">
+                    Route and connect a stream from <strong className="text-[#dae2fd]">{activeUnit.id}</strong> to:
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={targetUnitToConnect}
+                      onChange={(e) => setTargetUnitToConnect(e.target.value)}
+                      className="flex-1 bg-[#0b1326] border border-[#3d494c] rounded px-2 py-1 text-[#dae2fd] text-[10px] focus:outline-none"
+                    >
+                      <option value="">-- Select Target Equipment --</option>
+                      {units
+                        .filter((u) => u.id !== activeUnit.id)
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.id} ({u.name})
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (targetUnitToConnect) {
+                          onConnectUnits(activeUnit.id, targetUnitToConnect);
+                          setTargetUnitToConnect('');
+                        }
+                      }}
+                      disabled={!targetUnitToConnect}
+                      className="px-2.5 py-1 bg-[#ffb95f] hover:bg-[#ffc98a] disabled:opacity-40 disabled:hover:bg-[#ffb95f] text-[#2c1600] font-bold rounded text-[10.5px] transition-colors shrink-0"
+                      type="button"
+                    >
+                      LINK
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

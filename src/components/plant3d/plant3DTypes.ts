@@ -1,4 +1,4 @@
-import { EquipmentUnit, ProcessStream, UnitSystem } from '../../types/simulation';
+import { EquipmentUnit, ProcessStream, UnitSystem, UnitType } from '../../types/simulation';
 import { DynamicSimulationState } from '../../types/dynamic';
 
 export type VisualColorMode = 'phase' | 'temperature' | 'pressure' | 'status';
@@ -14,6 +14,10 @@ export interface Plant3DViewerProps {
   selectedStreamId?: string | null;
   onSelectUnit?: (id: string) => void;
   onSelectStream?: (id: string | null) => void;
+  onUpdateUnitPosition?: (id: string, x: number, y: number) => void;
+  onConnectUnits?: (sourceId: string, targetId: string) => void;
+  onAddUnit?: (type: UnitType) => void;
+  onAutoLayout?: () => void;
   unitSystem: UnitSystem;
   dynamicState?: DynamicSimulationState;
   onClose?: () => void; // If in modal/overlay mode
