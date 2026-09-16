@@ -14,6 +14,7 @@ import {
   mapCanvasTo3D,
   Unit3DMetadata,
   getStreamColor,
+  getUnitPort,
 } from './plant3DBuilders';
 import { formatFlow, formatPres, formatTemp } from '../../engine/thermoEngine';
 import { EquipmentUnit, ProcessStream } from '../../types/simulation';
@@ -122,7 +123,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const unitMetasRef = useRef<Map<string, Unit3DMetadata>>(new Map());
-  const pipeMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; path: THREE.CurvePath<THREE.Vector3> }>>(new Map());
+  const pipeMeshesRef = useRef<Map<string, { mesh: THREE.Object3D; path: THREE.CurvePath<THREE.Vector3> }>>(new Map());
   const particlesRef = useRef<FlowParticle[]>([]);
   const animFrameIdRef = useRef<number | null>(null);
   const highlightBoxRef = useRef<THREE.BoxHelper | null>(null);
@@ -202,8 +203,14 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
       (box.material as THREE.LineBasicMaterial).linewidth = 2;
       sceneRef.current.add(box);
       highlightBoxRef.current = box;
+    } else if (selectedStreamId && pipeMeshesRef.current.has(selectedStreamId)) {
+      const pipeEntry = pipeMeshesRef.current.get(selectedStreamId)!;
+      const box = new THREE.BoxHelper(pipeEntry.mesh, 0xfacc15);
+      (box.material as THREE.LineBasicMaterial).linewidth = 2;
+      sceneRef.current.add(box);
+      highlightBoxRef.current = box;
     }
-  }, [selectedUnitId]);
+  }, [selectedUnitId, selectedStreamId]);
 
   // Main Three.js Scene Setup & Rebuilding
   useEffect(() => {
@@ -310,6 +317,7 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
       bounds.maxZ = Math.max(bounds.maxZ, pos.z + 3);
 
       scene.add(meta.group);
+      meta.group.updateMatrixWorld(true);
       unitMetasRef.current.set(unit.id, meta);
     });
 
@@ -323,57 +331,85 @@ export const Plant3DViewer: React.FC<Plant3DViewerProps> = ({
     particlesRef.current = [];
 
     // Particle geometry & shared material for flow visualization
-    const particleGeo = new THREE.SphereGeometry(0.22, 16, 16);
+    const particleGeo = new THREE.SphereGeometry(0.20, 16, 16);
 
-    streams.forEach((stream) => {
+    // Battery limit stations coordinates
+    const westBatteryPos = new THREE.Vector3(-22.6, 0.75, 0);
+    const eastBatteryPos = new THREE.Vector3(15.6, 0.8, 0);
+
+    streams.forEach((stream, streamIndex) => {
       // Find source unit (which has this stream in outletStreamIds)
       const sourceUnit = units.find((u) => u.outletStreamIds.includes(stream.id));
       // Find destination unit (which has this stream in inletStreamIds)
       const destUnit = units.find((u) => u.inletStreamIds.includes(stream.id));
 
-      if (sourceUnit && destUnit) {
-        const sourceMeta = unitMetasRef.current.get(sourceUnit.id);
-        const destMeta = unitMetasRef.current.get(destUnit.id);
+      let worldStart: THREE.Vector3 | null = null;
+      let worldEnd: THREE.Vector3 | null = null;
+      let startDir = new THREE.Vector3(1, 0, 0);
+      let endDir = new THREE.Vector3(-1, 0, 0);
 
-        if (sourceMeta && destMeta) {
-          // Select source nozzle
-          const sourceNozzle = sourceMeta.outletNozzles[0] || new THREE.Vector3(0, 1.5, 0);
-          const worldStart = sourceNozzle.clone().applyMatrix4(sourceMeta.group.matrixWorld);
+      const sourceMeta = sourceUnit ? unitMetasRef.current.get(sourceUnit.id) : null;
+      const destMeta = destUnit ? unitMetasRef.current.get(destUnit.id) : null;
 
-          // Select dest nozzle
-          const destNozzle = destMeta.inletNozzles[0] || new THREE.Vector3(0, 1.5, 0);
-          const worldEnd = destNozzle.clone().applyMatrix4(destMeta.group.matrixWorld);
+      if (sourceMeta) {
+        const port = getUnitPort(sourceMeta, 'outlet', stream, streamIndex);
+        worldStart = port.worldPos;
+        startDir = port.direction;
+      } else {
+        // External battery limit feed (e.g. S-101 raw crude / feed)
+        worldStart = westBatteryPos.clone();
+        startDir = new THREE.Vector3(1, 0, 0);
+      }
 
-          const { mesh, path } = buildPipeRun(worldStart, worldEnd, stream, colorMode);
-          scene.add(mesh);
-          pipeMeshesRef.current.set(stream.id, { mesh, path });
+      if (destMeta) {
+        const port = getUnitPort(destMeta, 'inlet', stream, streamIndex);
+        worldEnd = port.worldPos;
+        endDir = port.direction;
+      } else {
+        // External battery limit export (e.g. S-107 bottoms product)
+        worldEnd = eastBatteryPos.clone();
+        endDir = new THREE.Vector3(1, 0, 0);
+      }
 
-          // Add animated high-visibility luminous flow particles along the pipe
-          const particleColor = getStreamColor(stream, colorMode);
-          const particleMat = new THREE.MeshStandardMaterial({
-            color: particleColor,
-            emissive: particleColor,
-            emissiveIntensity: 0.95,
-            roughness: 0.2,
-            metalness: 0.3,
+      if (worldStart && worldEnd) {
+        const { mesh, path } = buildPipeRun(
+          worldStart,
+          worldEnd,
+          stream,
+          colorMode,
+          0.09,
+          startDir,
+          endDir,
+          streamIndex
+        );
+        scene.add(mesh);
+        pipeMeshesRef.current.set(stream.id, { mesh, path });
+
+        // Add animated high-visibility luminous flow particles along the pipe
+        const particleColor = getStreamColor(stream, colorMode);
+        const particleMat = new THREE.MeshStandardMaterial({
+          color: particleColor,
+          emissive: particleColor,
+          emissiveIntensity: 0.95,
+          roughness: 0.2,
+          metalness: 0.3,
+        });
+
+        // 4 particles spaced along the pipe run for continuous fluid flow visualization
+        const numParticles = 4;
+        for (let p = 0; p < numParticles; p++) {
+          const particleMesh = new THREE.Mesh(particleGeo, particleMat);
+          scene.add(particleMesh);
+
+          // Flow speed proportional to mass flow rate
+          const speed = Math.max(0.002, Math.min(0.01, (stream.flowKgH / 50000) * 0.005));
+
+          particlesRef.current.push({
+            mesh: particleMesh,
+            path,
+            t: p / numParticles,
+            speed,
           });
-
-          // 4 particles spaced along the pipe run for continuous fluid flow visualization
-          const numParticles = 4;
-          for (let p = 0; p < numParticles; p++) {
-            const particleMesh = new THREE.Mesh(particleGeo, particleMat);
-            scene.add(particleMesh);
-
-            // Flow speed proportional to mass flow rate
-            const speed = Math.max(0.002, Math.min(0.01, (stream.flowKgH / 50000) * 0.005));
-
-            particlesRef.current.push({
-              mesh: particleMesh,
-              path,
-              t: p / numParticles,
-              speed,
-            });
-          }
         }
       }
     });

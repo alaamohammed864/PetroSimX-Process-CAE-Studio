@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { EquipmentUnit, ProcessStream, UnitSystem, UnitType } from '../../types/simulation';
 import { DynamicSimulationState } from '../../types/dynamic';
 
@@ -35,6 +36,14 @@ export interface NozzlePosition {
   worldPos: [number, number, number];
   direction: [number, number, number];
   type: 'inlet' | 'outlet';
+}
+
+export interface NozzlePort {
+  id: string;
+  streamId?: string;
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  flangeRadius: number;
 }
 
 export interface PipePoint {

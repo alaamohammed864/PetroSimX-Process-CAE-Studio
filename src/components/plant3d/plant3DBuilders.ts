@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { EquipmentUnit, ProcessStream, UnitType } from '../../types/simulation';
-import { RenderMode, VisualColorMode } from './plant3DTypes';
+import { NozzlePort, RenderMode, VisualColorMode } from './plant3DTypes';
 
 export interface Unit3DMetadata {
   unit: EquipmentUnit;
   inletNozzles: THREE.Vector3[];
   outletNozzles: THREE.Vector3[];
+  inletPorts?: NozzlePort[];
+  outletPorts?: NozzlePort[];
   group: THREE.Group;
   beaconLight?: THREE.Mesh;
   statusMaterial?: THREE.MeshStandardMaterial;
@@ -210,8 +212,33 @@ export function buildPump3D(unit: EquipmentUnit, renderMode: RenderMode): Unit3D
 
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-1.1, 0.75, 0)],
-    outletNozzles: [new THREE.Vector3(-0.4, 1.45, 0)],
+    inletNozzles: [new THREE.Vector3(-1.14, 0.75, 0), new THREE.Vector3(-1.8, 0.75, 0)],
+    outletNozzles: [new THREE.Vector3(-0.4, 1.49, 0)],
+    inletPorts: [
+      {
+        id: 'suction',
+        streamId: 'S-101',
+        position: new THREE.Vector3(-1.14, 0.75, 0),
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.26,
+      },
+      {
+        id: 'recycle_inlet',
+        streamId: 'S-106',
+        position: new THREE.Vector3(-1.8, 0.75, 0),
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.22,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'discharge',
+        streamId: 'S-102',
+        position: new THREE.Vector3(-0.4, 1.49, 0),
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.22,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -296,32 +323,79 @@ export function buildHeatex3D(unit: EquipmentUnit, renderMode: RenderMode): Unit
   tubeInlet.position.set(-shellLength / 2 - 0.5, 0.9, 0);
   group.add(tubeInlet);
 
+  const tubeInFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  tubeInFlange.position.set(-shellLength / 2 - 0.5, 0.65, 0);
+  group.add(tubeInFlange);
+
   // Tube side outlet (channel head side, top)
   const tubeOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.5, 16), COMMON_MATERIALS.carbonSteel);
   tubeOutlet.position.set(-shellLength / 2 - 0.5, 2.1, 0);
   group.add(tubeOutlet);
+
+  const tubeOutFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  tubeOutFlange.position.set(-shellLength / 2 - 0.5, 2.35, 0);
+  group.add(tubeOutFlange);
 
   // Shell side inlet (top right)
   const shellInlet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.5, 16), COMMON_MATERIALS.carbonSteel);
   shellInlet.position.set(1.2, 2.45, 0);
   group.add(shellInlet);
 
+  const shellInFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  shellInFlange.position.set(1.2, 2.7, 0);
+  group.add(shellInFlange);
+
   // Shell side outlet (bottom left)
   const shellOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.5, 16), COMMON_MATERIALS.carbonSteel);
-  shellOutlet.position.set(-1.0, 0.6, 0);
+  shellOutlet.position.set(-1.0, 0.55, 0);
   group.add(shellOutlet);
+
+  const shellOutFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  shellOutFlange.position.set(-1.0, 0.3, 0);
+  group.add(shellOutFlange);
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, 2.75);
 
+  const tubeInPos = new THREE.Vector3(-shellLength / 2 - 0.5, 0.61, 0);
+  const tubeOutPos = new THREE.Vector3(-shellLength / 2 - 0.5, 2.39, 0);
+  const shellInPos = new THREE.Vector3(1.2, 2.74, 0);
+  const shellOutPos = new THREE.Vector3(-1.0, 0.26, 0);
+
   return {
     unit,
-    inletNozzles: [
-      new THREE.Vector3(-shellLength / 2 - 0.5, 0.7, 0), // Tube side in
-      new THREE.Vector3(1.2, 2.7, 0),                    // Shell side in
+    inletNozzles: [tubeInPos, shellInPos],
+    outletNozzles: [tubeOutPos, shellOutPos],
+    inletPorts: [
+      {
+        id: 'tube_in',
+        streamId: 'S-102',
+        position: tubeInPos,
+        direction: new THREE.Vector3(0, -1, 0),
+        flangeRadius: 0.25,
+      },
+      {
+        id: 'shell_in',
+        streamId: 'S-105',
+        position: shellInPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.27,
+      },
     ],
-    outletNozzles: [
-      new THREE.Vector3(-shellLength / 2 - 0.5, 2.3, 0), // Tube side out
-      new THREE.Vector3(-1.0, 0.4, 0),                   // Shell side out
+    outletPorts: [
+      {
+        id: 'tube_out',
+        streamId: 'S-103',
+        position: tubeOutPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.25,
+      },
+      {
+        id: 'shell_out',
+        streamId: 'S-105b',
+        position: shellOutPos,
+        direction: new THREE.Vector3(0, -1, 0),
+        flangeRadius: 0.27,
+      },
     ],
     group,
     beaconLight: beaconMesh,
@@ -390,11 +464,21 @@ export function buildFurnace3D(unit: EquipmentUnit, renderMode: RenderMode): Uni
   coilInlet.position.set(-1.3, 4.2, 0);
   group.add(coilInlet);
 
+  const coilInletFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  coilInletFlange.rotation.z = Math.PI / 2;
+  coilInletFlange.position.set(-1.6, 4.2, 0);
+  group.add(coilInletFlange);
+
   // Coil Process Outlet (Radiant bottom outlet - hot stream to reactor)
   const coilOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.6, 16), COMMON_MATERIALS.stainlessSteel);
   coilOutlet.rotation.z = Math.PI / 2;
   coilOutlet.position.set(1.6, 1.2, 0);
   group.add(coilOutlet);
+
+  const coilOutletFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16), COMMON_MATERIALS.stainlessSteel);
+  coilOutletFlange.rotation.z = Math.PI / 2;
+  coilOutletFlange.position.set(1.9, 1.2, 0);
+  group.add(coilOutletFlange);
 
   // Internal flame glow (visible in shaded or x-ray mode)
   const flameLight = new THREE.PointLight(0xff6600, 2.5, 6);
@@ -403,10 +487,31 @@ export function buildFurnace3D(unit: EquipmentUnit, renderMode: RenderMode): Uni
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, 9.6);
 
+  const inletPos = new THREE.Vector3(-1.64, 4.2, 0);
+  const outletPos = new THREE.Vector3(1.94, 1.2, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-1.6, 4.2, 0)],
-    outletNozzles: [new THREE.Vector3(1.9, 1.2, 0)],
+    inletNozzles: [inletPos],
+    outletNozzles: [outletPos],
+    inletPorts: [
+      {
+        id: 'coil_in',
+        streamId: 'S-103',
+        position: inletPos,
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.26,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'coil_out',
+        streamId: 'S-104',
+        position: outletPos,
+        direction: new THREE.Vector3(1, 0, 0),
+        flangeRadius: 0.28,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -514,6 +619,10 @@ export function buildReactor3D(unit: EquipmentUnit, renderMode: RenderMode): Uni
   bottomOutlet.position.set(0, baseY - 0.4, 0);
   group.add(bottomOutlet);
 
+  const bottomFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.12, 16), COMMON_MATERIALS.carbonSteel);
+  bottomFlange.position.set(0, baseY - 0.74, 0);
+  group.add(bottomFlange);
+
   // External Ring Platforms & Ladders
   [baseY + 2.0, baseY + 4.8].forEach((platY) => {
     const platform = new THREE.Mesh(
@@ -534,10 +643,31 @@ export function buildReactor3D(unit: EquipmentUnit, renderMode: RenderMode): Uni
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, baseY + reactorHeight + reactorRadius + 0.9);
 
+  const topInletPos = new THREE.Vector3(0, baseY + reactorHeight + reactorRadius + 0.76, 0);
+  const bottomOutletPos = new THREE.Vector3(0, baseY - 0.76, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(0, baseY + reactorHeight + reactorRadius + 0.75, 0)],
-    outletNozzles: [new THREE.Vector3(0, baseY - 0.7, 0)],
+    inletNozzles: [topInletPos],
+    outletNozzles: [bottomOutletPos],
+    inletPorts: [
+      {
+        id: 'reactor_inlet',
+        streamId: 'S-104',
+        position: topInletPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.36,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'reactor_outlet',
+        streamId: 'S-105',
+        position: bottomOutletPos,
+        direction: new THREE.Vector3(0, -1, 0),
+        flangeRadius: 0.36,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -618,15 +748,28 @@ export function buildVessel3D(unit: EquipmentUnit, renderMode: RenderMode): Unit
   feedInlet.position.set(-vesselRadius - 0.3, baseY + vesselHeight * 0.6, 0);
   group.add(feedInlet);
 
+  const feedInletFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16), COMMON_MATERIALS.carbonSteel);
+  feedInletFlange.rotation.z = Math.PI / 2;
+  feedInletFlange.position.set(-vesselRadius - 0.6, baseY + vesselHeight * 0.6, 0);
+  group.add(feedInletFlange);
+
   // Top Vapor Outlet (S-106 H2 Recycle gas)
   const vaporOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.7, 16), COMMON_MATERIALS.carbonSteel);
   vaporOutlet.position.set(0, baseY + vesselHeight + 0.7, 0);
   group.add(vaporOutlet);
 
+  const vaporFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16), COMMON_MATERIALS.carbonSteel);
+  vaporFlange.position.set(0, baseY + vesselHeight + 1.05, 0);
+  group.add(vaporFlange);
+
   // Bottom Liquid Outlet (S-107 Stabilized reformate)
   const liquidOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.7, 16), COMMON_MATERIALS.carbonSteel);
   liquidOutlet.position.set(0, baseY - 0.7, 0);
   group.add(liquidOutlet);
+
+  const liquidFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16), COMMON_MATERIALS.carbonSteel);
+  liquidFlange.position.set(0, baseY - 1.05, 0);
+  group.add(liquidFlange);
 
   // Level Gauge Column on side
   const bridle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 12), COMMON_MATERIALS.stainlessSteel);
@@ -635,12 +778,38 @@ export function buildVessel3D(unit: EquipmentUnit, renderMode: RenderMode): Unit
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, baseY + vesselHeight + 1.1);
 
+  const feedPos = new THREE.Vector3(-vesselRadius - 0.64, baseY + vesselHeight * 0.6, 0);
+  const vaporPos = new THREE.Vector3(0, baseY + vesselHeight + 1.09, 0);
+  const liquidPos = new THREE.Vector3(0, baseY - 1.09, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-vesselRadius - 0.6, baseY + vesselHeight * 0.6, 0)],
-    outletNozzles: [
-      new THREE.Vector3(0, baseY + vesselHeight + 1.05, 0), // Top vapor
-      new THREE.Vector3(0, baseY - 0.9, 0),                 // Bottom liquid
+    inletNozzles: [feedPos],
+    outletNozzles: [vaporPos, liquidPos],
+    inletPorts: [
+      {
+        id: 'feed_in',
+        streamId: 'S-105b',
+        position: feedPos,
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.28,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'vapor_out',
+        streamId: 'S-106',
+        position: vaporPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.28,
+      },
+      {
+        id: 'liquid_out',
+        streamId: 'S-107',
+        position: liquidPos,
+        direction: new THREE.Vector3(0, -1, 0),
+        flangeRadius: 0.26,
+      },
     ],
     group,
     beaconLight: beaconMesh,
@@ -745,12 +914,35 @@ export function buildColumn3D(unit: EquipmentUnit, renderMode: RenderMode): Unit
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, baseY + columnHeight + columnRadius + 1.2);
 
+  const feedInPos = new THREE.Vector3(columnRadius + 0.6, baseY + columnHeight * 0.5, 0);
+  const vaporOutPos = new THREE.Vector3(0, baseY + columnHeight + columnRadius + 0.8, 0);
+  const liquidOutPos = new THREE.Vector3(0, baseY - 0.8, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(columnRadius + 0.6, baseY + columnHeight * 0.5, 0)],
-    outletNozzles: [
-      new THREE.Vector3(0, baseY + columnHeight + columnRadius + 0.8, 0), // Top vapor
-      new THREE.Vector3(0, baseY - 0.8, 0),                               // Bottom liquid
+    inletNozzles: [feedInPos],
+    outletNozzles: [vaporOutPos, liquidOutPos],
+    inletPorts: [
+      {
+        id: 'feed_in',
+        position: feedInPos,
+        direction: new THREE.Vector3(1, 0, 0),
+        flangeRadius: 0.28,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'overhead_vapor',
+        position: vaporOutPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.32,
+      },
+      {
+        id: 'bottoms_liquid',
+        position: liquidOutPos,
+        direction: new THREE.Vector3(0, -1, 0),
+        flangeRadius: 0.28,
+      },
     ],
     group,
     beaconLight: beaconMesh,
@@ -808,10 +1000,29 @@ export function buildCompressor3D(unit: EquipmentUnit, renderMode: RenderMode): 
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, 1.85);
 
+  const compInPos = new THREE.Vector3(-0.8, 1.8, 0);
+  const compOutPos = new THREE.Vector3(-1.5, 0.95, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-0.8, 1.8, 0)],
-    outletNozzles: [new THREE.Vector3(-1.5, 0.95, 0)],
+    inletNozzles: [compInPos],
+    outletNozzles: [compOutPos],
+    inletPorts: [
+      {
+        id: 'suction',
+        position: compInPos,
+        direction: new THREE.Vector3(0, 1, 0),
+        flangeRadius: 0.28,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'discharge',
+        position: compOutPos,
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.24,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -874,10 +1085,29 @@ export function buildValve3D(unit: EquipmentUnit, renderMode: RenderMode): Unit3
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, 1.8);
 
+  const valveInPos = new THREE.Vector3(-0.5, 0.7, 0);
+  const valveOutPos = new THREE.Vector3(0.5, 0.7, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-0.5, 0.7, 0)],
-    outletNozzles: [new THREE.Vector3(0.5, 0.7, 0)],
+    inletNozzles: [valveInPos],
+    outletNozzles: [valveOutPos],
+    inletPorts: [
+      {
+        id: 'valve_in',
+        position: valveInPos,
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.32,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'valve_out',
+        position: valveOutPos,
+        direction: new THREE.Vector3(1, 0, 0),
+        flangeRadius: 0.32,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -945,10 +1175,29 @@ export function buildStorageTank3D(unit: EquipmentUnit, renderMode: RenderMode):
 
   const { beaconMesh, mat: statusMaterial } = addStatusBeacon(group, unit, tankHeight + 1.2);
 
+  const tankInPos = new THREE.Vector3(-tankRadius - 0.6, 1.2, 0);
+  const tankOutPos = new THREE.Vector3(tankRadius + 0.6, 0.8, 0);
+
   return {
     unit,
-    inletNozzles: [new THREE.Vector3(-tankRadius - 0.6, 1.2, 0)],
-    outletNozzles: [new THREE.Vector3(tankRadius + 0.6, 0.8, 0)],
+    inletNozzles: [tankInPos],
+    outletNozzles: [tankOutPos],
+    inletPorts: [
+      {
+        id: 'tank_in',
+        position: tankInPos,
+        direction: new THREE.Vector3(-1, 0, 0),
+        flangeRadius: 0.28,
+      },
+    ],
+    outletPorts: [
+      {
+        id: 'tank_out',
+        position: tankOutPos,
+        direction: new THREE.Vector3(1, 0, 0),
+        flangeRadius: 0.3,
+      },
+    ],
     group,
     beaconLight: beaconMesh,
     statusMaterial,
@@ -1020,56 +1269,410 @@ export function getStreamColor(stream: ProcessStream, colorMode: VisualColorMode
 }
 
 /**
- * Build 3D Pipe Run connecting two points in 3D space with orthogonal routing
+ * Resolves the precise nozzle connection port for a given stream on an equipment unit
+ */
+export function getUnitPort(
+  meta: Unit3DMetadata,
+  type: 'inlet' | 'outlet',
+  stream: ProcessStream,
+  streamIndex = 0
+): { worldPos: THREE.Vector3; direction: THREE.Vector3; flangeRadius: number } {
+  meta.group.updateMatrixWorld(true);
+  const ports = type === 'inlet' ? meta.inletPorts : meta.outletPorts;
+  const legacyList = type === 'inlet' ? meta.inletNozzles : meta.outletNozzles;
+
+  if (ports && ports.length > 0) {
+    // 1. Direct streamId match
+    const matched = ports.find((p) => p.streamId === stream.id || p.id.toLowerCase() === stream.id.toLowerCase());
+    if (matched) {
+      const worldPos = matched.position.clone().applyMatrix4(meta.group.matrixWorld);
+      const worldDir = matched.direction.clone().transformDirection(meta.group.matrixWorld).normalize();
+      return { worldPos, direction: worldDir, flangeRadius: matched.flangeRadius };
+    }
+
+    // 2. Specific equipment port logic
+    if (meta.unit.type === 'heatex') {
+      if (type === 'inlet') {
+        const isHot = stream.tempC > 200 || stream.id === 'S-105';
+        const port = isHot ? (ports[1] || ports[0]) : ports[0];
+        const worldPos = port.position.clone().applyMatrix4(meta.group.matrixWorld);
+        const worldDir = port.direction.clone().transformDirection(meta.group.matrixWorld).normalize();
+        return { worldPos, direction: worldDir, flangeRadius: port.flangeRadius };
+      } else {
+        const isTubeOut = stream.id === 'S-103' || stream.tempC > 150;
+        const port = isTubeOut ? ports[0] : (ports[1] || ports[0]);
+        const worldPos = port.position.clone().applyMatrix4(meta.group.matrixWorld);
+        const worldDir = port.direction.clone().transformDirection(meta.group.matrixWorld).normalize();
+        return { worldPos, direction: worldDir, flangeRadius: port.flangeRadius };
+      }
+    }
+
+    if (meta.unit.type === 'vessel' || meta.unit.type === 'column' || meta.unit.type === 'three_phase_separator') {
+      if (type === 'outlet') {
+        const isVapor = stream.vaporFraction > 0.5 || stream.phase.toLowerCase().includes('vapor') || stream.id === 'S-106';
+        const port = isVapor ? ports[0] : (ports[1] || ports[0]);
+        const worldPos = port.position.clone().applyMatrix4(meta.group.matrixWorld);
+        const worldDir = port.direction.clone().transformDirection(meta.group.matrixWorld).normalize();
+        return { worldPos, direction: worldDir, flangeRadius: port.flangeRadius };
+      }
+    }
+
+    // 3. Fallback based on stream index
+    const streamList = type === 'inlet' ? meta.unit.inletStreamIds : meta.unit.outletStreamIds;
+    const sIdx = Math.max(0, streamList.indexOf(stream.id));
+    const port = ports[sIdx % ports.length];
+    const worldPos = port.position.clone().applyMatrix4(meta.group.matrixWorld);
+    const worldDir = port.direction.clone().transformDirection(meta.group.matrixWorld).normalize();
+    return { worldPos, direction: worldDir, flangeRadius: port.flangeRadius };
+  }
+
+  const localPos = (legacyList && legacyList[streamIndex % legacyList.length]) || new THREE.Vector3(0, 1.5, 0);
+  const worldPos = localPos.clone().applyMatrix4(meta.group.matrixWorld);
+  return { worldPos, direction: new THREE.Vector3(0, 1, 0), flangeRadius: 0.24 };
+}
+
+/**
+ * Creates companion weld-neck flange bolted flush to the equipment nozzle face
+ */
+function createCompanionFlange(pos: THREE.Vector3, dir: THREE.Vector3, flangeRadius: number): THREE.Mesh {
+  const flangeGeo = new THREE.CylinderGeometry(flangeRadius, flangeRadius, 0.08, 16);
+  const flangeMat = COMMON_MATERIALS.stainlessSteel;
+  const flangeMesh = new THREE.Mesh(flangeGeo, flangeMat);
+
+  const normDir = dir.clone().normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+  if (Math.abs(normDir.dot(up)) < 0.999) {
+    flangeMesh.quaternion.setFromUnitVectors(up, normDir);
+  } else if (normDir.y < 0) {
+    flangeMesh.rotation.x = Math.PI;
+  }
+  flangeMesh.position.copy(pos).add(normDir.clone().multiplyScalar(0.04));
+  flangeMesh.castShadow = true;
+  return flangeMesh;
+}
+
+/**
+ * Removes redundant points and collinear intermediate nodes
+ */
+function cleanWaypoints(rawPoints: THREE.Vector3[]): THREE.Vector3[] {
+  if (rawPoints.length <= 2) return rawPoints;
+  const pts: THREE.Vector3[] = [rawPoints[0].clone()];
+
+  for (let i = 1; i < rawPoints.length; i++) {
+    const prev = pts[pts.length - 1];
+    const curr = rawPoints[i];
+    if (prev.distanceTo(curr) > 0.04) {
+      pts.push(curr.clone());
+    }
+  }
+
+  if (pts.length <= 2) return pts;
+  const simplified: THREE.Vector3[] = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const pPrev = simplified[simplified.length - 1];
+    const pCurr = pts[i];
+    const pNext = pts[i + 1];
+
+    const d1 = pCurr.clone().sub(pPrev).normalize();
+    const d2 = pNext.clone().sub(pCurr).normalize();
+
+    if (d1.dot(d2) < 0.999) {
+      simplified.push(pCurr);
+    }
+  }
+  simplified.push(pts[pts.length - 1]);
+  return simplified;
+}
+
+/**
+ * Generates an ANSI B16.9 standard filleted curve path with smooth elbow curvature
+ */
+function buildFilletedCurvePath(points: THREE.Vector3[]): { curvePath: THREE.CurvePath<THREE.Vector3>; renderPoints: THREE.Vector3[] } {
+  const path = new THREE.CurvePath<THREE.Vector3>();
+  if (points.length <= 2) {
+    if (points.length === 2) {
+      path.add(new THREE.LineCurve3(points[0], points[1]));
+    }
+    return { curvePath: path, renderPoints: points };
+  }
+
+  const renderPoints: THREE.Vector3[] = [points[0]];
+  let currentStart = points[0];
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const corner = points[i];
+    const next = points[i + 1];
+
+    const vIn = corner.clone().sub(prev);
+    const vOut = next.clone().sub(corner);
+    const lenIn = vIn.length();
+    const lenOut = vOut.length();
+
+    const maxR = Math.min(0.35, Math.min(lenIn, lenOut) * 0.45);
+
+    if (maxR > 0.05) {
+      const dIn = vIn.clone().normalize();
+      const dOut = vOut.clone().normalize();
+
+      const p1 = corner.clone().sub(dIn.clone().multiplyScalar(maxR));
+      const p2 = corner.clone().add(dOut.clone().multiplyScalar(maxR));
+
+      if (currentStart.distanceTo(p1) > 0.01) {
+        path.add(new THREE.LineCurve3(currentStart, p1));
+        renderPoints.push(p1);
+      }
+
+      const fillet = new THREE.QuadraticBezierCurve3(p1, corner, p2);
+      path.add(fillet);
+      renderPoints.push(corner);
+      renderPoints.push(p2);
+
+      currentStart = p2;
+    } else {
+      path.add(new THREE.LineCurve3(currentStart, corner));
+      renderPoints.push(corner);
+      currentStart = corner;
+    }
+  }
+
+  const finalEnd = points[points.length - 1];
+  if (currentStart.distanceTo(finalEnd) > 0.01) {
+    path.add(new THREE.LineCurve3(currentStart, finalEnd));
+    renderPoints.push(finalEnd);
+  }
+
+  return { curvePath: path, renderPoints };
+}
+
+/**
+ * Build 3D Pipe Run with ANSI filleted orthogonal routing and companion flanges
  */
 export function buildPipeRun(
   start: THREE.Vector3,
   end: THREE.Vector3,
   stream: ProcessStream,
   colorMode: VisualColorMode,
-  pipeRadius = 0.08
-): { mesh: THREE.Mesh; path: THREE.CurvePath<THREE.Vector3>; points: THREE.Vector3[] } {
-  const path = new THREE.CurvePath<THREE.Vector3>();
+  pipeRadius = 0.08,
+  startDir: THREE.Vector3 = new THREE.Vector3(0, 1, 0),
+  endDir: THREE.Vector3 = new THREE.Vector3(0, 1, 0),
+  streamIndex = 0
+): { mesh: THREE.Group; path: THREE.CurvePath<THREE.Vector3>; points: THREE.Vector3[] } {
+  let rawPoints: THREE.Vector3[] = [];
 
-  // Intermediate elevation for pipe rack clearance
-  const rackY = Math.max(3.0, Math.max(start.y, end.y) + 0.8);
+  const sId = stream.id;
 
-  const p0 = start.clone();
-  const p1 = new THREE.Vector3(start.x, rackY, start.z);
-  const p2 = new THREE.Vector3(end.x, rackY, start.z);
-  const p3 = new THREE.Vector3(end.x, rackY, end.z);
-  const p4 = end.clone();
+  if (sId === 'S-101') {
+    // Feed battery limit to pump suction (straight horizontal run along X axis)
+    rawPoints = [start.clone(), end.clone()];
+  } else if (sId === 'S-102') {
+    // P-101 discharge to E-101 tube bottom inlet
+    const zOffset = -0.7;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, 2.2, start.z),
+      new THREE.Vector3(start.x, 2.2, start.z + zOffset),
+      new THREE.Vector3(end.x, 2.2, start.z + zOffset),
+      new THREE.Vector3(end.x, 0.25, start.z + zOffset),
+      new THREE.Vector3(end.x, 0.25, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-103') {
+    // E-101 tube top outlet to Furnace convection inlet
+    const zOffset = -0.6;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, end.y, start.z),
+      new THREE.Vector3(start.x, end.y, start.z + zOffset),
+      new THREE.Vector3(end.x - 1.0, end.y, start.z + zOffset),
+      new THREE.Vector3(end.x - 1.0, end.y, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-104') {
+    // Furnace radiant bottom outlet to Reactor top charge inlet
+    const bridgeY = 11.4;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x + 1.2, start.y, start.z),
+      new THREE.Vector3(start.x + 1.2, bridgeY, start.z),
+      new THREE.Vector3(end.x, bridgeY, end.z),
+      new THREE.Vector3(end.x, end.y + 0.5, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-105') {
+    // Reactor bottom effluent to E-101 shell top inlet
+    const zCorridor = start.z + 1.4;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, 0.6, start.z),
+      new THREE.Vector3(start.x, 0.6, zCorridor),
+      new THREE.Vector3(end.x, 0.6, zCorridor),
+      new THREE.Vector3(end.x, 3.8, zCorridor),
+      new THREE.Vector3(end.x, 3.8, end.z),
+      new THREE.Vector3(end.x, end.y + 0.4, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-105b') {
+    // E-101 shell bottom outlet to V-101 mixed feed inlet
+    const zRack = start.z + 0.8;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, 0.25, start.z),
+      new THREE.Vector3(start.x, 0.25, zRack),
+      new THREE.Vector3(start.x, 3.2, zRack),
+      new THREE.Vector3(end.x - 1.2, 3.2, zRack),
+      new THREE.Vector3(end.x - 1.2, end.y, zRack),
+      new THREE.Vector3(end.x - 1.2, end.y, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-106') {
+    // V-101 top vapor to P-101 suction recycle
+    const upperRackY = 7.2;
+    const zVaporRack = start.z - 1.6;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, upperRackY, start.z),
+      new THREE.Vector3(start.x, upperRackY, zVaporRack),
+      new THREE.Vector3(end.x, upperRackY, zVaporRack),
+      new THREE.Vector3(end.x, upperRackY, end.z),
+      new THREE.Vector3(end.x, end.y + 0.6, end.z),
+      end.clone(),
+    ];
+  } else if (sId === 'S-107') {
+    // V-101 bottom liquid to East Battery Limit product manifold
+    const zExport = start.z + 0.6;
+    rawPoints = [
+      start.clone(),
+      new THREE.Vector3(start.x, 0.25, start.z),
+      new THREE.Vector3(start.x, 0.25, zExport),
+      new THREE.Vector3(start.x, 0.8, zExport),
+      new THREE.Vector3(end.x - 0.8, 0.8, zExport),
+      new THREE.Vector3(end.x - 0.8, 0.8, end.z),
+      end.clone(),
+    ];
+  } else {
+    // Universal Industrial Manhattan Router
+    const sNorm = startDir.clone().normalize();
+    const eNorm = endDir.clone().normalize();
+    const stubStart = start.clone().add(sNorm.clone().multiplyScalar(0.7));
+    const stubEnd = end.clone().add(eNorm.clone().multiplyScalar(0.7));
+    const zRack = 0 + ((streamIndex % 5) - 2) * 0.6;
+    const yRack = Math.max(3.2, Math.max(start.y, end.y) + 0.8);
 
-  const points = [p0, p1, p2, p3, p4];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    path.add(new THREE.LineCurve3(points[i], points[i + 1]));
+    rawPoints = [
+      start.clone(),
+      stubStart.clone(),
+      new THREE.Vector3(stubStart.x, yRack, stubStart.z),
+      new THREE.Vector3(stubStart.x, yRack, zRack),
+      new THREE.Vector3(stubEnd.x, yRack, zRack),
+      new THREE.Vector3(stubEnd.x, yRack, stubEnd.z),
+      stubEnd.clone(),
+      end.clone(),
+    ];
   }
 
-  const geometry = new THREE.TubeGeometry(path, 64, pipeRadius, 12, false);
+  const cleaned = cleanWaypoints(rawPoints);
+  const { curvePath, renderPoints } = buildFilletedCurvePath(cleaned);
+
+  const tubularSegments = Math.max(32, cleaned.length * 16);
+  const geometry = new THREE.TubeGeometry(curvePath, tubularSegments, pipeRadius, 14, false);
   const color = getStreamColor(stream, colorMode);
 
   const material = new THREE.MeshStandardMaterial({
     color: new THREE.Color(color),
-    metalness: 0.7,
-    roughness: 0.35,
+    metalness: 0.75,
+    roughness: 0.3,
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.userData = { type: 'pipe', id: stream.id, stream };
+  const tubeMesh = new THREE.Mesh(geometry, material);
+  tubeMesh.castShadow = true;
+  tubeMesh.receiveShadow = true;
 
-  return { mesh, path, points };
+  const pipeGroup = new THREE.Group();
+  pipeGroup.userData = { type: 'pipe', id: stream.id, stream };
+  pipeGroup.add(tubeMesh);
+
+  // Companion weld-neck flanges at connection faces
+  const startFlange = createCompanionFlange(start, startDir, pipeRadius * 1.55);
+  const endFlange = createCompanionFlange(end, endDir.clone().negate(), pipeRadius * 1.55);
+  pipeGroup.add(startFlange);
+  pipeGroup.add(endFlange);
+
+  return { mesh: pipeGroup, path: curvePath, points: renderPoints };
 }
 
 /**
- * Ground Grid, Paving, and Pipe Racks
+ * Battery Limit Tie-In Stations (Feed & Product Manifolds)
+ */
+export function buildBatteryLimits(scene: THREE.Scene): { westStationPos: THREE.Vector3; eastStationPos: THREE.Vector3 } {
+  const stationMat = COMMON_MATERIALS.castIron;
+
+  // West Battery Limit (Feed Station)
+  const westX = -23.0;
+  const westPad = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 2.4), COMMON_MATERIALS.concreteFoundation);
+  westPad.position.set(westX, 0.125, 0);
+  scene.add(westPad);
+
+  // Feed riser stanchions & manifold header
+  [-0.6, 0.6].forEach((z) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.8, 12), stationMat);
+    post.position.set(westX, 0.4, z);
+    scene.add(post);
+  });
+
+  const westHeader = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.8, 16), COMMON_MATERIALS.carbonSteel);
+  westHeader.position.set(westX, 0.75, 0);
+  scene.add(westHeader);
+
+  // Tie-in nozzle pointing East
+  const westNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 16), COMMON_MATERIALS.carbonSteel);
+  westNozzle.rotation.z = Math.PI / 2;
+  westNozzle.position.set(westX + 0.2, 0.75, 0);
+  scene.add(westNozzle);
+
+  // Handwheel valve
+  const westValveWheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 8, 16), COMMON_MATERIALS.safetyRed);
+  westValveWheel.position.set(westX + 0.1, 1.1, 0);
+  scene.add(westValveWheel);
+
+  // East Battery Limit (Product Export Station)
+  const eastX = 16.0;
+  const eastPad = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 2.4), COMMON_MATERIALS.concreteFoundation);
+  eastPad.position.set(eastX, 0.125, 0);
+  scene.add(eastPad);
+
+  [-0.6, 0.6].forEach((z) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.8, 12), stationMat);
+    post.position.set(eastX, 0.4, z);
+    scene.add(post);
+  });
+
+  const eastHeader = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.8, 16), COMMON_MATERIALS.carbonSteel);
+  eastHeader.position.set(eastX, 0.8, 0);
+  scene.add(eastHeader);
+
+  const eastNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 16), COMMON_MATERIALS.carbonSteel);
+  eastNozzle.rotation.z = Math.PI / 2;
+  eastNozzle.position.set(eastX - 0.2, 0.8, 0);
+  scene.add(eastNozzle);
+
+  const eastValveWheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 8, 16), COMMON_MATERIALS.safetyRed);
+  eastValveWheel.position.set(eastX - 0.1, 1.15, 0);
+  scene.add(eastValveWheel);
+
+  return {
+    westStationPos: new THREE.Vector3(westX + 0.4, 0.75, 0),
+    eastStationPos: new THREE.Vector3(eastX - 0.4, 0.8, 0),
+  };
+}
+
+/**
+ * Ground Grid, Paving, Dual-Tier Pipe Racks, and Battery Limit Stations
  */
 export function buildGroundAndRacks(scene: THREE.Scene, bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): void {
   // Concrete Ground Pavement
-  const width = Math.max(80, (bounds.maxX - bounds.minX) * 1.8);
-  const depth = Math.max(80, (bounds.maxZ - bounds.minZ) * 1.8);
+  const width = Math.max(90, (bounds.maxX - bounds.minX) * 2.0);
+  const depth = Math.max(60, (bounds.maxZ - bounds.minZ) * 2.5);
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerZ = (bounds.minZ + bounds.maxZ) / 2;
 
@@ -1087,24 +1690,56 @@ export function buildGroundAndRacks(scene: THREE.Scene, bounds: { minX: number; 
   scene.add(ground);
 
   // Grid Lines
-  const gridHelper = new THREE.GridHelper(width, 40, 0x1e293b, 0x0f172a);
+  const gridHelper = new THREE.GridHelper(width, 45, 0x1e293b, 0x0f172a);
   gridHelper.position.set(centerX, 0, centerZ);
   scene.add(gridHelper);
 
-  // Elevated Structural Steel Pipe Racks
+  // Dual-Tier Elevated Structural Steel Pipe Racks
   const rackMat = COMMON_MATERIALS.safetyYellow;
+  const steelMat = COMMON_MATERIALS.carbonSteel;
   const rackZ = centerZ;
-  for (let x = bounds.minX - 5; x <= bounds.maxX + 5; x += 6) {
-    // Twin H-beams
-    [-2, 2].forEach((zOffset) => {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.4, 0.2), rackMat);
-      post.position.set(x, 1.7, rackZ + zOffset);
+
+  const startRackX = Math.min(-20, bounds.minX - 2);
+  const endRackX = Math.max(14, bounds.maxX + 2);
+
+  for (let x = startRackX; x <= endRackX; x += 6) {
+    // Twin vertical H-column bents (height = 7.4m)
+    [-2.2, 2.2].forEach((zOffset) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7.4, 0.22), rackMat);
+      post.position.set(x, 3.7, rackZ + zOffset);
+      post.castShadow = true;
       scene.add(post);
     });
 
-    // Cross beam
-    const crossBeam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 4.2), rackMat);
-    crossBeam.position.set(x, 3.3, rackZ);
-    scene.add(crossBeam);
+    // Lower Tier Cross Beam (Y = 3.2m)
+    const lowerBeam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.24, 4.6), rackMat);
+    lowerBeam.position.set(x, 3.2, rackZ);
+    lowerBeam.castShadow = true;
+    scene.add(lowerBeam);
+
+    // Upper Tier Cross Beam (Y = 7.0m)
+    const upperBeam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.24, 4.6), rackMat);
+    upperBeam.position.set(x, 7.0, rackZ);
+    upperBeam.castShadow = true;
+    scene.add(upperBeam);
   }
+
+  // Longitudinal stringers connecting the bents
+  const stringerLength = endRackX - startRackX + 2;
+  const stringerCenterX = (startRackX + endRackX) / 2;
+
+  [-2.2, 2.2].forEach((zOffset) => {
+    // Lower tier stringer
+    const lowerStringer = new THREE.Mesh(new THREE.BoxGeometry(stringerLength, 0.18, 0.18), steelMat);
+    lowerStringer.position.set(stringerCenterX, 3.2, rackZ + zOffset);
+    scene.add(lowerStringer);
+
+    // Upper tier stringer
+    const upperStringer = new THREE.Mesh(new THREE.BoxGeometry(stringerLength, 0.18, 0.18), steelMat);
+    upperStringer.position.set(stringerCenterX, 7.0, rackZ + zOffset);
+    scene.add(upperStringer);
+  });
+
+  // Battery limit tie-in stations
+  buildBatteryLimits(scene);
 }
