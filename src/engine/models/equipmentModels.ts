@@ -286,7 +286,7 @@ export function solveHeaterCooler(
     return createEmptyResult(unitId, unitType, equations, errors, warnings);
   }
 
-  const feed = inlets[0];
+  const feed = inlets.length === 1 ? inlets[0] : solveMixer(`${unitId}_INLET_MIX`, inlets).outletStreams[0];
   const dP = params.pressureDropBar ?? 0.3;
   const pOut = Math.max(0.1, feed.pressureBar - dP);
 
@@ -372,8 +372,8 @@ export interface HeatExchangerParams {
 
 export function solveHeatExchanger(
   unitId: string,
-  hotInlet: StreamCalculationResult,
-  coldInlet: StreamCalculationResult,
+  stream1: StreamCalculationResult,
+  stream2: StreamCalculationResult,
   params: HeatExchangerParams = {}
 ): UnitModelResult {
   const t0 = performance.now();
@@ -385,22 +385,26 @@ export function solveHeatExchanger(
     'Second Law Constraint: T_hot,out >= T_cold,in + Delta_T_min',
   ];
 
-  if (!hotInlet || !coldInlet) {
+  if (!stream1 || !stream2) {
     errors.push(`Heat Exchanger ${unitId} requires both hot and cold inlet streams.`);
     return createEmptyResult(unitId, 'HeatExchanger', equations, errors, warnings);
   }
+
+  // Automatically detect which stream is hot and which is cold
+  const isFirstHot = stream1.temperatureC >= stream2.temperatureC;
+  const hotInlet = isFirstHot ? stream1 : stream2;
+  const coldInlet = isFirstHot ? stream2 : stream1;
 
   const dPHot = params.hotPressureDropBar ?? 0.4;
   const dPCold = params.coldPressureDropBar ?? 0.3;
   const pHotOut = Math.max(0.1, hotInlet.pressureBar - dPHot);
   const pColdOut = Math.max(0.1, coldInlet.pressureBar - dPCold);
 
-  const deltaTMin = params.minApproachDeltaTC ?? 10.0;
-  if (hotInlet.temperatureC <= coldInlet.temperatureC) {
-    errors.push(
-      `Temperature crossover at inlet: Hot stream (${hotInlet.temperatureC} °C) is cooler than or equal to cold stream (${coldInlet.temperatureC} °C).`
+  const deltaTMin = params.minApproachDeltaTC ?? 5.0;
+  if (hotInlet.temperatureC <= coldInlet.temperatureC + 0.1) {
+    warnings.push(
+      `Negligible thermal driving force: Hot stream (${hotInlet.temperatureC.toFixed(1)} °C) is close to cold stream (${coldInlet.temperatureC.toFixed(1)} °C).`
     );
-    return createEmptyResult(unitId, 'HeatExchanger', equations, errors, warnings);
   }
 
   // Maximum possible heat transfer limited by 2nd Law (approach delta T)
@@ -449,11 +453,14 @@ export function solveHeatExchanger(
     actualQ_KW - hotInlet.totalMassFlowKgS * (hotInlet.enthalpyKjKg - hotOutlet.enthalpyKjKg)
   );
 
+  // Order outlets matching input stream positions
+  const orderedOutlets = isFirstHot ? [hotOutlet, coldOutlet] : [coldOutlet, hotOutlet];
+
   return {
     unitId,
     unitType: 'HeatExchanger',
     status: errors.length > 0 ? 'FAILED' : 'CONVERGED',
-    outletStreams: [hotOutlet, coldOutlet],
+    outletStreams: orderedOutlets,
     dutyKW: actualQ_KW,
     workKW: 0,
     pressureDropBar: Math.max(dPHot, dPCold),
@@ -507,7 +514,7 @@ export function solvePump(
     return createEmptyResult(unitId, 'Pump', equations, errors, warnings);
   }
 
-  const feed = inlets[0];
+  const feed = inlets.length === 1 ? inlets[0] : solveMixer(`${unitId}_INLET_MIX`, inlets).outletStreams[0];
   const eta = params.hydraulicEfficiency ?? 0.75;
   const pOut = params.outletPressureBar;
 
@@ -599,7 +606,7 @@ export function solveCompressor(
     return createEmptyResult(unitId, 'Compressor', equations, errors, warnings);
   }
 
-  const feed = inlets[0];
+  const feed = inlets.length === 1 ? inlets[0] : solveMixer(`${unitId}_INLET_MIX`, inlets).outletStreams[0];
   const etaS = params.isentropicEfficiency ?? 0.78;
   const pOut = params.outletPressureBar;
 
@@ -696,7 +703,7 @@ export function solveValve(
     return createEmptyResult(unitId, 'Valve', equations, errors, warnings);
   }
 
-  const feed = inlets[0];
+  const feed = inlets.length === 1 ? inlets[0] : solveMixer(`${unitId}_INLET_MIX`, inlets).outletStreams[0];
   const pOut = params.outletPressureBar;
 
   if (pOut >= feed.pressureBar) {
@@ -773,7 +780,7 @@ export function solveSeparator(
     return createEmptyResult(unitId, 'Separator', equations, errors, warnings);
   }
 
-  const feed = inlets[0];
+  const feed = inlets.length === 1 ? inlets[0] : solveMixer(`${unitId}_INLET_MIX`, inlets).outletStreams[0];
   const pVessel = params.vesselPressureBar ?? feed.pressureBar;
 
   let flashResult: StreamCalculationResult;

@@ -154,6 +154,23 @@ function applyVariableValue(
       }
       if (variable.propertyKey === 'equilibrium.inletTempC') {
         u.equilibrium.inletTempC = value;
+        // Propagate to upstream furnace (e.g. H-101) and connecting feed stream (e.g. S-104)
+        const furnace = newUnits.find((item) => item.id === 'H-101' || item.type === 'furnace');
+        if (furnace) {
+          if (!furnace.equilibrium) {
+            furnace.equilibrium = { inletTempC: 244.5, outletTempC: value, operatingPresBar: 82.5, pressureDropBar: 1.3 };
+          } else {
+            furnace.equilibrium.outletTempC = value;
+          }
+          if (furnace.furnaceSpec) {
+            furnace.furnaceSpec.outletTargetTempC = value;
+          }
+        }
+        const inletStreamsToUpdate = u.inletStreamIds || ['S-104'];
+        inletStreamsToUpdate.forEach((sid) => {
+          const st = newStreams.find((s) => s.id === sid);
+          if (st) st.tempC = value;
+        });
       } else if (variable.propertyKey === 'equilibrium.operatingPresBar') {
         u.equilibrium.operatingPresBar = value;
       } else if (variable.propertyKey === 'equilibrium.dutyMW') {

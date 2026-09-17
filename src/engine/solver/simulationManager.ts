@@ -282,10 +282,10 @@ export async function runSteadyStateSimulation(
           break;
         }
         case 'heatex': {
-          // Heat exchanger with hot and cold sides
-          const hotIn = inletStreams[0];
-          const coldIn = inletStreams[1] || inletStreams[0];
-          modelResult = solveHeatExchanger(unitId, hotIn, coldIn, {
+          // Heat exchanger with dual process sides
+          const in0 = inletStreams[0];
+          const in1 = inletStreams[1] || inletStreams[0];
+          modelResult = solveHeatExchanger(unitId, in0, in1, {
             uA_KW_per_K: 125.0,
             hotPressureDropBar: unit.equilibrium?.pressureDropBar || 0.4,
             coldPressureDropBar: 0.35,

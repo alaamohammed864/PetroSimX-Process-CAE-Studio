@@ -535,59 +535,70 @@ export const ColumnDesignView: React.FC<ColumnDesignViewProps> = ({ unitSystem }
             {/* Profile Bar Matrix */}
             <div className="overflow-x-auto">
               <div className="flex items-end gap-1 h-36 pt-4 pb-2 border-b border-[#3d494c]/30 min-w-[540px]">
-                {rigorousResult.stages.map((stage) => {
-                  const tempFraction = Math.max(0.1, Math.min(1.0, (stage.temperatureC - 30) / 120));
-                  const isFeed = stage.stageNumber === feedStage;
-                  const isHovered = hoveredStage === stage.stageNumber;
+                {(() => {
+                  const stageTemps = rigorousResult.stages.map((s) => s.temperatureC);
+                  const minStageTemp = Math.min(...stageTemps);
+                  const maxStageTemp = Math.max(...stageTemps);
+                  const tempRange = Math.max(5, maxStageTemp - minStageTemp);
 
-                  return (
-                    <div
-                      key={stage.stageNumber}
-                      onMouseEnter={() => setHoveredStage(stage.stageNumber)}
-                      onMouseLeave={() => setHoveredStage(null)}
-                      className="flex-1 flex flex-col items-center group cursor-pointer relative"
-                    >
-                      {/* Bar for Temperature */}
+                  return rigorousResult.stages.map((stage) => {
+                    const normTemp = (stage.temperatureC - minStageTemp) / tempRange;
+                    const barHeightPercent = Math.max(15, Math.min(95, normTemp * 80 + 15));
+                    const isFeed = stage.stageNumber === feedStage;
+                    const isHovered = hoveredStage === stage.stageNumber;
+
+                    return (
                       <div
-                        style={{ height: `${tempFraction * 90}%` }}
-                        className={`w-full rounded-t transition-all ${
-                          isFeed
-                            ? 'bg-[#ffb95f]'
-                            : isHovered
-                            ? 'bg-[#4cd7f6] ring-1 ring-white'
-                            : 'bg-[#4cd7f6]/60 hover:bg-[#4cd7f6]'
-                        }`}
-                      />
-                      <span className={`text-[8px] mt-1 font-mono ${isFeed ? 'text-[#ffb95f] font-bold' : 'text-[#869397]'}`}>
-                        {stage.stageNumber}
-                      </span>
-
-                      {/* Tooltip on Hover */}
-                      {isHovered && (
-                        <div className="absolute bottom-full mb-2 z-20 bg-[#060e20] p-2 rounded shadow-2xl border border-[#4cd7f6] w-40 font-mono text-[9px] pointer-events-none">
-                          <div className="font-bold text-[#4cd7f6] border-b border-[#3d494c]/40 pb-0.5">
-                            Stage #{stage.stageNumber} {isFeed ? '(FEED)' : ''}
-                          </div>
-                          <div className="text-[#dae2fd] mt-1">
-                            Temp: <span className="text-[#ffddb8] font-bold">{stage.temperatureC.toFixed(1)} °C</span>
-                          </div>
-                          <div className="text-[#dae2fd]">
-                            Pres: <span>{stage.pressureBar.toFixed(2)} bar</span>
-                          </div>
-                          <div className="text-[#dae2fd]">
-                            Liquid L: <span className="text-[#4edea3]">{(stage.liquidFlowKgH / 1000).toFixed(1)} t/h</span>
-                          </div>
-                          <div className="text-[#dae2fd]">
-                            Vapor V: <span className="text-[#acedff]">{(stage.vaporFlowKgH / 1000).toFixed(1)} t/h</span>
-                          </div>
-                          <div className="text-[#869397] mt-1 pt-1 border-t border-[#3d494c]/20">
-                            x(LK): {((stage.liquidMoleFractions[lightKey] || 0) * 100).toFixed(1)}% | x(HK): {((stage.liquidMoleFractions[heavyKey] || 0) * 100).toFixed(1)}%
-                          </div>
+                        key={stage.stageNumber}
+                        onMouseEnter={() => setHoveredStage(stage.stageNumber)}
+                        onMouseLeave={() => setHoveredStage(null)}
+                        className="h-full flex-1 flex flex-col justify-end items-center group cursor-pointer relative"
+                      >
+                        {/* Bar container with resolvable height */}
+                        <div className="w-full flex-1 flex items-end justify-center">
+                          <div
+                            style={{ height: `${barHeightPercent}%` }}
+                            className={`w-full rounded-t transition-all ${
+                              isFeed
+                                ? 'bg-[#ffb95f]'
+                                : isHovered
+                                ? 'bg-[#4cd7f6] ring-1 ring-white'
+                                : 'bg-[#4cd7f6]/60 hover:bg-[#4cd7f6]'
+                            }`}
+                          />
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        <span className={`text-[8px] mt-1 font-mono shrink-0 ${isFeed ? 'text-[#ffb95f] font-bold' : 'text-[#869397]'}`}>
+                          {stage.stageNumber}
+                        </span>
+
+                        {/* Tooltip on Hover */}
+                        {isHovered && (
+                          <div className="absolute bottom-full mb-2 z-20 bg-[#060e20] p-2 rounded shadow-2xl border border-[#4cd7f6] w-44 font-mono text-[9px] pointer-events-none">
+                            <div className="font-bold text-[#4cd7f6] border-b border-[#3d494c]/40 pb-0.5 flex justify-between items-center">
+                              <span>Stage #{stage.stageNumber}</span>
+                              {isFeed && <span className="text-[#ffb95f] text-[8px] uppercase tracking-wider font-bold">FEED TRAY</span>}
+                            </div>
+                            <div className="text-[#dae2fd] mt-1">
+                              Temp: <span className="text-[#ffddb8] font-bold">{stage.temperatureC.toFixed(1)} °C</span>
+                            </div>
+                            <div className="text-[#dae2fd]">
+                              Pres: <span>{stage.pressureBar.toFixed(2)} bar</span>
+                            </div>
+                            <div className="text-[#dae2fd]">
+                              Liquid L: <span className="text-[#4edea3]">{(stage.liquidFlowKgH / 1000).toFixed(1)} t/h</span>
+                            </div>
+                            <div className="text-[#dae2fd]">
+                              Vapor V: <span className="text-[#acedff]">{(stage.vaporFlowKgH / 1000).toFixed(1)} t/h</span>
+                            </div>
+                            <div className="text-[#869397] mt-1 pt-1 border-t border-[#3d494c]/20">
+                              x({lightKey}): {((stage.liquidMoleFractions[lightKey] || 0) * 100).toFixed(1)}% | x({heavyKey}): {((stage.liquidMoleFractions[heavyKey] || 0) * 100).toFixed(1)}%
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 

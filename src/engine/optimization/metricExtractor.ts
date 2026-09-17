@@ -100,14 +100,15 @@ export function extractFlowsheetMetrics(
   // Fuel gas: $8.5 / MMBtu (~ $29.0 / MWh thermal)
   // Electricity: $0.095 / kWh
   // Feedstock crude naphtha: $0.58 / kg ($580 / metric ton)
-  // Product reformate value: $0.82 / kg ($820 / metric ton)
+  // Reformate value scales with aromatic conversion (RON octane premium: $0.74 to $0.92 / kg)
+  const reformatePricePerKg = 0.72 + (reactantConversionPct / 100) * 0.18;
   const fuelCostPerHour = thermalEnergyMWhPerHr * 29.0;
   const electricityCostPerHour = (compressorPowerKW * 0.095);
   const feedstockCostPerHour = feedRateKgH * 0.58;
   const catalystLossCostPerHour = 45.0; // $/h
 
   const operatingCostPerHour = fuelCostPerHour + electricityCostPerHour + catalystLossCostPerHour;
-  const productRevenuePerHour = productionRateKgH * 0.82;
+  const productRevenuePerHour = productionRateKgH * reformatePricePerKg;
   const netOperatingMarginPerHour = productRevenuePerHour - feedstockCostPerHour - operatingCostPerHour;
 
   return {

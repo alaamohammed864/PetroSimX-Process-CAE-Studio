@@ -18,6 +18,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'tab.reports': 'Reports & Audits',
     'tab.matrixSheets': 'Matrix Sheets',
     'tab.digitalTwin': 'Digital Twin',
+    'tab.marketAnalytics': 'Market Analytics',
 
     // Header Actions & Status
     'header.solve': 'SOLVE',
@@ -128,6 +129,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'tab.reports': 'التقارير والتدقيق',
     'tab.matrixSheets': 'جداول الموازنة',
     'tab.digitalTwin': 'التوأم الرقمي',
+    'tab.marketAnalytics': 'تحليلات السوق والطاقة',
 
     // Header Actions & Status
     'header.solve': 'حل المحاكاة',

@@ -150,15 +150,24 @@ export const SensitivityAnalysisPanel: React.FC<SensitivityAnalysisPanelProps> =
 
     const minX = Math.min(...xVals);
     const maxX = Math.max(...xVals);
-    const rangeX = maxX - minX || 1;
+    const rangeX = Math.max(1e-4, maxX - minX);
 
-    const minY1 = Math.min(...y1Vals);
-    const maxY1 = Math.max(...y1Vals);
-    const rangeY1 = maxY1 - minY1 || 1;
+    const rawMinY1 = Math.min(...y1Vals);
+    const rawMaxY1 = Math.max(...y1Vals);
+    const diffY1 = rawMaxY1 - rawMinY1;
+    // Add 8% vertical margin or fallback margin if flat
+    const marginY1 = diffY1 > 1e-4 ? diffY1 * 0.08 : (Math.abs(rawMinY1) * 0.05 || 1);
+    const minY1 = rawMinY1 - marginY1;
+    const maxY1 = rawMaxY1 + marginY1;
+    const rangeY1 = Math.max(1e-4, maxY1 - minY1);
 
-    const minY2 = y2Vals.length > 0 ? Math.min(...y2Vals) : 0;
-    const maxY2 = y2Vals.length > 0 ? Math.max(...y2Vals) : 1;
-    const rangeY2 = maxY2 - minY2 || 1;
+    const rawMinY2 = y2Vals.length > 0 ? Math.min(...y2Vals) : 0;
+    const rawMaxY2 = y2Vals.length > 0 ? Math.max(...y2Vals) : 1;
+    const diffY2 = rawMaxY2 - rawMinY2;
+    const marginY2 = diffY2 > 1e-4 ? diffY2 * 0.08 : (Math.abs(rawMinY2) * 0.05 || 1);
+    const minY2 = rawMinY2 - marginY2;
+    const maxY2 = rawMaxY2 + marginY2;
+    const rangeY2 = Math.max(1e-4, maxY2 - minY2);
 
     const width = 640;
     const height = 260;

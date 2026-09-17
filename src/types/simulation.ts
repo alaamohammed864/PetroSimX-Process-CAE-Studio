@@ -139,4 +139,5 @@ export type ViewTab =
   | 'energy-utilities'
   | 'stream-matrix' 
   | 'digital-twin-monitor'
-  | 'engineering-reports';
+  | 'engineering-reports'
+  | 'market-analytics';

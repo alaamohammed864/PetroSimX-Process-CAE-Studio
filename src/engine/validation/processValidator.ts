@@ -227,28 +227,42 @@ export function validateEquipmentUnit(
 
   // 3. Heat Exchanger Validation
   if (uType === 'heatex') {
-    // If two inlets are present: inlets[0] = Hot, inlets[1] = Cold
     if (inlets.length >= 2) {
-      const hotIn = inlets[0];
-      const coldIn = inlets[1];
-      if (hotIn.temperatureC <= coldIn.temperatureC) {
+      const isFirstHot = inlets[0].temperatureC >= inlets[1].temperatureC;
+      const hotIn = isFirstHot ? inlets[0] : inlets[1];
+      const coldIn = isFirstHot ? inlets[1] : inlets[0];
+
+      if (Math.abs(hotIn.temperatureC - coldIn.temperatureC) < 0.1) {
         issues.push({
-          id: `${uId}_HEX_TEMP_INVERSION`,
+          id: `${uId}_HEX_ZERO_DRIVING_FORCE`,
           sourceType: 'unit',
           sourceId: uId,
-          severity: 'error',
+          severity: 'warning',
           category: 'temperature',
-          title: 'Heat Exchanger Temperature Inversion',
-          message: `Hot inlet stream (${hotIn.temperatureC.toFixed(1)} °C) is colder than or equal to cold inlet stream (${coldIn.temperatureC.toFixed(1)} °C).`,
-          remedyRecommendation: 'Verify stream connections: connect warmer fluid to Hot Side inlet.',
+          title: 'Heat Exchanger Zero Driving Force',
+          message: `Inlet streams have virtually identical temperature (${hotIn.temperatureC.toFixed(1)} °C).`,
+          remedyRecommendation: 'Check stream temperature specifications.',
         });
       }
+
       if (outlets.length >= 2) {
-        const hotOut = outlets[0];
-        const coldOut = outlets[1];
-        if (hotOut.temperatureC < coldIn.temperatureC || coldOut.temperatureC > hotIn.temperatureC) {
+        const hotOut = isFirstHot ? outlets[0] : outlets[1];
+        const coldOut = isFirstHot ? outlets[1] : outlets[0];
+        if (hotOut && coldIn && hotOut.temperatureC < coldIn.temperatureC - 0.5) {
           issues.push({
             id: `${uId}_HEX_TEMP_CROSS`,
+            sourceType: 'unit',
+            sourceId: uId,
+            severity: 'error',
+            category: 'temperature',
+            title: 'Thermodynamic Temperature Cross Violation',
+            message: `Exchanger ${unit.name} violates Second Law: hot outlet (${hotOut.temperatureC.toFixed(1)} °C) is colder than cold inlet (${coldIn.temperatureC.toFixed(1)} °C).`,
+            remedyRecommendation: 'Reduce heat duty or switch to multi-shell counter-current arrangement.',
+          });
+        }
+        if (coldOut && hotIn && coldOut.temperatureC > hotIn.temperatureC + 0.5) {
+          issues.push({
+            id: `${uId}_HEX_TEMP_CROSS_COLD`,
             sourceType: 'unit',
             sourceId: uId,
             severity: 'error',

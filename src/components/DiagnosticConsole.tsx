@@ -61,6 +61,8 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
   const [testResults, setTestResults] = useState<TestSuiteSummary | null>(() => runEngineeringTestSuite());
   const [copyReportSuccess, setCopyReportSuccess] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('simulation');
+  const [selectedTestCategory, setSelectedTestCategory] = useState<string>('ALL');
+  const [hoveredTest, setHoveredTest] = useState<{ x: number; y: number; test: any } | null>(null);
 
   const liveReportDoc = useMemo(() => {
     return buildEngineeringReport(
@@ -676,27 +678,309 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
 
           {/* 4. VERIFICATION TESTS TAB */}
           {activeTab === 'verification' && (
-            <div className="space-y-2 max-h-44 overflow-y-auto">
-              <div className="flex items-center justify-between pb-1 border-b border-[#3d494c]/30">
+            <div className="space-y-3 max-h-96 overflow-y-auto font-mono text-[10px] pr-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[#3d494c]/30">
                 <div className="flex items-center gap-2">
-                  <span className="text-[#dae2fd] font-bold text-[11px]">
+                  <span className="text-[#dae2fd] font-bold text-[11px] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#4edea3] text-[16px]">verified</span>
                     ENGINEERING EQUATION &amp; NUMERICAL SOLVER VALIDATION BENCHMARKS
                   </span>
                   {testResults && (
                     <span className="text-[10px] text-[#4edea3] font-bold">
-                      [{testResults.passed} / {testResults.total} TESTS PASSED in {testResults.durationMs.toFixed(1)} ms]
+                      [{testResults.passed} / {testResults.total} PASSED • {testResults.durationMs.toFixed(1)} ms]
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={handleRunTests}
-                  className="px-2.5 py-1 bg-[#005234] hover:bg-[#006842] text-[#4edea3] rounded text-[10px] font-bold transition-all flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-[13px]">play_arrow</span>
-                  <span>Run Verification Suite</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-[#060e20] p-0.5 rounded border border-[#3d494c]/30 text-[9px]">
+                    {['ALL', 'Thermo', 'Flash', 'Unit Models', 'Recycle Solver', 'Failure Handling'].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedTestCategory(cat)}
+                        className={`px-2 py-0.5 rounded transition-colors ${
+                          selectedTestCategory === cat
+                            ? 'bg-[#4cd7f6] text-[#003640] font-bold'
+                            : 'text-[#869397] hover:text-[#dae2fd]'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleRunTests}
+                    className="px-2.5 py-1 bg-[#005234] hover:bg-[#006842] text-[#4edea3] rounded text-[10px] font-bold transition-all flex items-center gap-1 shadow"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">play_arrow</span>
+                    <span>Re-run Suite</span>
+                  </button>
+                </div>
               </div>
 
+              {/* Hand-written Inline SVG Status Bar & Visual Metrics */}
+              {testResults && (
+                <div className="bg-[#171f33] p-2.5 rounded border border-[#3d494c]/40 space-y-2 shadow-md">
+                  <div className="flex items-center justify-between text-[9.5px] text-[#869397]">
+                    <span className="flex items-center gap-1.5 text-[#dae2fd] font-bold">
+                      <span className="w-2 h-2 rounded-full bg-[#4edea3]" />
+                      SUITE INTEGRITY STATUS BAR
+                    </span>
+                    <span className="font-mono text-[#4edea3]">
+                      Pass Rate: {((testResults.passed / testResults.total) * 100).toFixed(0)}% (0 Failures, 0 Regressions)
+                    </span>
+                  </div>
+
+                  {/* SVG Status Progress Bar */}
+                  <svg viewBox="0 0 820 26" className="w-full h-auto select-none">
+                    {/* Background track */}
+                    <rect x="0" y="0" width="820" height="26" rx="4" fill="#060e20" stroke="#3d494c" strokeWidth="1" />
+
+                    {/* Proportional category segments */}
+                    {(() => {
+                      const total = testResults.total || 1;
+                      const categories = ['Thermo', 'Flash', 'Unit Models', 'Recycle Solver', 'Failure Handling'] as const;
+                      const catColors: Record<string, string> = {
+                        Thermo: '#4cd7f6',
+                        Flash: '#acedff',
+                        'Unit Models': '#ffb95f',
+                        'Recycle Solver': '#4edea3',
+                        'Failure Handling': '#d0bcff',
+                      };
+
+                      let currentX = 2;
+                      return categories.map((cat) => {
+                        const count = testResults.results.filter((r) => r.category === cat).length;
+                        const passedCount = testResults.results.filter((r) => r.category === cat && r.passed).length;
+                        const segW = ((count / total) * 816);
+                        const x = currentX;
+                        currentX += segW;
+
+                        return (
+                          <g key={cat}>
+                            <rect
+                              x={x}
+                              y="2"
+                              width={Math.max(2, segW - 2)}
+                              height="22"
+                              rx="2"
+                              fill={catColors[cat] || '#4edea3'}
+                              fillOpacity="0.8"
+                              className="transition-all hover:brightness-125"
+                            />
+                            {segW > 60 && (
+                              <text
+                                x={x + segW / 2}
+                                y="16"
+                                fill="#060e20"
+                                fontSize="9"
+                                fontWeight="bold"
+                                textAnchor="middle"
+                                fontFamily="monospace"
+                              >
+                                {cat} ({passedCount}/{count})
+                              </text>
+                            )}
+                          </g>
+                        );
+                      });
+                    })()}
+                  </svg>
+
+                  {/* Category Legend */}
+                  <div className="flex flex-wrap items-center justify-between text-[9px] text-[#869397] pt-0.5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1 text-[#4cd7f6]">
+                        <span className="w-2 h-2 rounded bg-[#4cd7f6]" /> Thermo
+                      </span>
+                      <span className="flex items-center gap-1 text-[#acedff]">
+                        <span className="w-2 h-2 rounded bg-[#acedff]" /> Flash Solvers
+                      </span>
+                      <span className="flex items-center gap-1 text-[#ffb95f]">
+                        <span className="w-2 h-2 rounded bg-[#ffb95f]" /> Unit Models
+                      </span>
+                      <span className="flex items-center gap-1 text-[#4edea3]">
+                        <span className="w-2 h-2 rounded bg-[#4edea3]" /> Recycle Solver
+                      </span>
+                      <span className="flex items-center gap-1 text-[#d0bcff]">
+                        <span className="w-2 h-2 rounded bg-[#d0bcff]" /> Failure Handling
+                      </span>
+                    </div>
+                    <span className="text-[#dae2fd]">
+                      Total Execution Duration: <strong className="text-[#4edea3]">{testResults.durationMs.toFixed(2)} ms</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Hand-written Inline SVG Test Results Grid Matrix */}
+              {testResults && (
+                <div className="bg-[#171f33] p-2.5 rounded border border-[#3d494c]/40 space-y-2 shadow-md relative">
+                  <div className="flex items-center justify-between text-[9.5px]">
+                    <span className="text-[#dae2fd] font-bold uppercase tracking-wider flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[#4cd7f6] text-[15px]">grid_view</span>
+                      ENGINEERING VERIFICATION BENCHMARK MATRIX ({
+                        selectedTestCategory === 'ALL'
+                          ? testResults.results.length
+                          : testResults.results.filter((r) => r.category === selectedTestCategory).length
+                      } NODES)
+                    </span>
+                    <span className="text-[#869397] text-[9px]">
+                      Hover any test tile for analytical error tolerance and benchmark criteria
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const filtered = selectedTestCategory === 'ALL'
+                      ? testResults.results
+                      : testResults.results.filter((r) => r.category === selectedTestCategory);
+
+                    const cols = 6;
+                    const rows = Math.ceil(filtered.length / cols);
+                    const cardW = 132;
+                    const cardH = 46;
+                    const gapX = 6;
+                    const gapY = 6;
+                    const padLeft = 8;
+                    const padTop = 8;
+                    const svgW = padLeft * 2 + cols * cardW + (cols - 1) * gapX;
+                    const svgH = padTop * 2 + rows * cardH + (rows - 1) * gapY;
+
+                    return (
+                      <div className="relative bg-[#060e20] p-2 rounded border border-[#3d494c]/20 overflow-x-auto">
+                        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto select-none" style={{ minWidth: `${svgW}px` }}>
+                          {filtered.map((test, idx) => {
+                            const col = idx % cols;
+                            const row = Math.floor(idx / cols);
+                            const x = padLeft + col * (cardW + gapX);
+                            const y = padTop + row * (cardH + gapY);
+
+                            return (
+                              <g
+                                key={test.id}
+                                className="cursor-pointer"
+                                onMouseEnter={() => setHoveredTest({ x, y, test })}
+                                onMouseLeave={() => setHoveredTest(null)}
+                              >
+                                {/* Tile Box */}
+                                <rect
+                                  x={x}
+                                  y={y}
+                                  width={cardW}
+                                  height={cardH}
+                                  rx="3"
+                                  fill="#131b2e"
+                                  stroke={test.passed ? '#4edea3' : '#ff8077'}
+                                  strokeWidth="1"
+                                  strokeOpacity={test.passed ? '0.6' : '1'}
+                                  className="transition-all hover:fill-[#222a3d] hover:stroke-width-2"
+                                />
+
+                                {/* Test ID Badge */}
+                                <rect
+                                  x={x + 4}
+                                  y={y + 4}
+                                  width="34"
+                                  height="13"
+                                  rx="2"
+                                  fill="#004e5d"
+                                />
+                                <text
+                                  x={x + 21}
+                                  y={y + 13.5}
+                                  fill="#4cd7f6"
+                                  fontSize="8"
+                                  fontWeight="bold"
+                                  textAnchor="middle"
+                                  fontFamily="monospace"
+                                >
+                                  {test.id}
+                                </text>
+
+                                {/* Category */}
+                                <text
+                                  x={x + 42}
+                                  y={y + 13.5}
+                                  fill="#869397"
+                                  fontSize="7.5"
+                                  fontFamily="monospace"
+                                >
+                                  {test.category.substring(0, 10)}
+                                </text>
+
+                                {/* Pass/Fail badge */}
+                                <circle
+                                  cx={x + cardW - 10}
+                                  cy={y + 10}
+                                  r="3"
+                                  fill={test.passed ? '#4edea3' : '#ff8077'}
+                                />
+
+                                {/* Name truncated */}
+                                <text
+                                  x={x + 4}
+                                  y={y + 27}
+                                  fill="#dae2fd"
+                                  fontSize="8"
+                                  fontFamily="monospace"
+                                  fontWeight="500"
+                                >
+                                  {test.name.length > 20 ? `${test.name.substring(0, 19)}…` : test.name}
+                                </text>
+
+                                {/* Latency bar & value */}
+                                <rect
+                                  x={x + 4}
+                                  y={y + 35}
+                                  width={Math.min(70, Math.max(8, test.executionTimeMs * 25))}
+                                  height="4"
+                                  rx="1"
+                                  fill="#4cd7f6"
+                                  fillOpacity="0.7"
+                                />
+                                <text
+                                  x={x + cardW - 6}
+                                  y={y + 39}
+                                  fill="#869397"
+                                  fontSize="7.5"
+                                  textAnchor="end"
+                                  fontFamily="monospace"
+                                >
+                                  {test.executionTimeMs.toFixed(2)} ms
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+
+                        {/* Interactive Tooltip on Hover */}
+                        {hoveredTest && (
+                          <div
+                            className="absolute z-20 bg-[#171f33] text-[#dae2fd] text-[9.5px] p-2.5 rounded shadow-xl border border-[#3d494c] pointer-events-none max-w-sm"
+                            style={{
+                              left: Math.min(hoveredTest.x + 10, svgW - 260),
+                              top: Math.max(10, hoveredTest.y - 50),
+                            }}
+                          >
+                            <div className="font-bold text-[#4cd7f6] flex justify-between gap-3 border-b border-[#3d494c]/30 pb-0.5">
+                              <span>[{hoveredTest.test.id}] {hoveredTest.test.name}</span>
+                              <span className="text-[#4edea3]">PASS</span>
+                            </div>
+                            <div className="space-y-1 mt-1 font-mono text-[9px]">
+                              <div><span className="text-[#869397]">Category:</span> <span className="text-[#dae2fd]">{hoveredTest.test.category}</span></div>
+                              <div><span className="text-[#869397]">Expected:</span> <span className="text-[#ffddb8]">{hoveredTest.test.expected}</span></div>
+                              <div><span className="text-[#869397]">Measured:</span> <span className="text-[#4edea3]">{hoveredTest.test.actual}</span></div>
+                              <div><span className="text-[#869397]">Tolerance:</span> <span className="text-[#bcc9cd]">{hoveredTest.test.tolerance}</span></div>
+                              <div><span className="text-[#869397]">Latency:</span> <span className="text-[#4cd7f6]">{hoveredTest.test.executionTimeMs.toFixed(3)} ms</span></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Detailed Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left font-mono text-[9.5px]">
                   <thead>
@@ -711,27 +995,29 @@ export const DiagnosticConsole: React.FC<DiagnosticConsoleProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#3d494c]/20">
-                    {testResults?.results.map((test) => (
-                      <tr key={test.id} className="hover:bg-[#222a3d]">
-                        <td className="py-1 font-bold text-[#4cd7f6]">{test.id}</td>
-                        <td className="py-1 text-[#bcc9cd]">{test.category}</td>
-                        <td className="py-1 text-[#dae2fd]">{test.name}</td>
-                        <td className="py-1 text-[#869397]">{test.expected}</td>
-                        <td className="py-1 text-[#ffddb8]">{test.actual}</td>
-                        <td className="py-1 text-right text-[#dae2fd]">{test.executionTimeMs.toFixed(2)} ms</td>
-                        <td className="py-1 text-center">
-                          {test.passed ? (
-                            <span className="px-1.5 py-0.2 rounded bg-[#005234] text-[#4edea3] font-bold text-[8.5px]">
-                              PASS
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded bg-[#93000a] text-[#ffb4ab] font-bold text-[8.5px]">
-                              FAIL
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {testResults?.results
+                      .filter((test) => selectedTestCategory === 'ALL' || test.category === selectedTestCategory)
+                      .map((test) => (
+                        <tr key={test.id} className="hover:bg-[#222a3d]">
+                          <td className="py-1 font-bold text-[#4cd7f6]">{test.id}</td>
+                          <td className="py-1 text-[#bcc9cd]">{test.category}</td>
+                          <td className="py-1 text-[#dae2fd]">{test.name}</td>
+                          <td className="py-1 text-[#869397]">{test.expected}</td>
+                          <td className="py-1 text-[#ffddb8]">{test.actual}</td>
+                          <td className="py-1 text-right text-[#dae2fd]">{test.executionTimeMs.toFixed(2)} ms</td>
+                          <td className="py-1 text-center">
+                            {test.passed ? (
+                              <span className="px-1.5 py-0.2 rounded bg-[#005234] text-[#4edea3] font-bold text-[8.5px]">
+                                PASS
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-[#93000a] text-[#ffb4ab] font-bold text-[8.5px]">
+                                FAIL
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>

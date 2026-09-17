@@ -232,30 +232,36 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="h-7 sm:h-6 px-2 flex items-center justify-between bg-[#131b2e] border-b border-[#3d494c]/20 text-[11px] overflow-x-auto no-scrollbar scroll-smooth">
         <nav className="flex items-center gap-0.5 shrink-0">
           {[
-            { id: 'flowsheet-canvas', labelKey: 'tab.flowsheet', defaultLabel: 'Flowsheet' },
-            { id: '3d-plant-view', labelKey: 'tab.3dPlant', defaultLabel: '3D Plant' },
-            { id: 'column-design', labelKey: 'tab.columnDesign', defaultLabel: 'Column Design' },
-            { id: 'thermodynamics-engine', labelKey: 'tab.thermodynamics', defaultLabel: 'Thermodynamics' },
-            { id: 'reactor-engineering', labelKey: 'tab.reactors', defaultLabel: 'Reactors' },
-            { id: 'sensitivity-optimization', labelKey: 'tab.optimization', defaultLabel: 'Optimization' },
-            { id: 'energy-utilities', labelKey: 'tab.energyEmissions', defaultLabel: 'Energy & Emissions' },
-            { id: 'engineering-reports', labelKey: 'tab.reports', defaultLabel: 'Reports & Audits' },
-            { id: 'stream-matrix', labelKey: 'tab.matrixSheets', defaultLabel: 'Matrix Sheets' },
-            { id: 'digital-twin-monitor', labelKey: 'tab.digitalTwin', defaultLabel: 'Digital Twin' },
+            { id: 'flowsheet-canvas', labelKey: 'tab.flowsheet', defaultLabel: 'Flowsheet', icon: 'account_tree' },
+            { id: '3d-plant-view', labelKey: 'tab.3dPlant', defaultLabel: '3D Plant', icon: 'view_in_ar' },
+            { id: 'column-design', labelKey: 'tab.columnDesign', defaultLabel: 'Column Design', icon: 'view_column' },
+            { id: 'thermodynamics-engine', labelKey: 'tab.thermodynamics', defaultLabel: 'Thermodynamics', icon: 'science' },
+            { id: 'reactor-engineering', labelKey: 'tab.reactors', defaultLabel: 'Reactors', icon: 'cyclone' },
+            { id: 'sensitivity-optimization', labelKey: 'tab.optimization', defaultLabel: 'Optimization', icon: 'tune' },
+            { id: 'energy-utilities', labelKey: 'tab.energyEmissions', defaultLabel: 'Energy & Emissions', icon: 'bolt' },
+            { id: 'engineering-reports', labelKey: 'tab.reports', defaultLabel: 'Reports & Audits', icon: 'description' },
+            { id: 'stream-matrix', labelKey: 'tab.matrixSheets', defaultLabel: 'Matrix Sheets', icon: 'table_chart' },
+            { id: 'digital-twin-monitor', labelKey: 'tab.digitalTwin', defaultLabel: 'Digital Twin', icon: 'monitoring' },
+            { id: 'market-analytics', labelKey: 'tab.marketAnalytics', defaultLabel: 'Market Analytics', icon: 'query_stats' },
           ].map((tab) => {
             const isActive = currentTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id as ViewTab)}
-                className={`px-2.5 py-1 sm:py-0.5 transition-colors text-[11px] sm:text-[11.5px] font-medium rounded-t shrink-0 whitespace-nowrap ${
+                className={`px-2.5 py-1 sm:py-0.5 transition-colors text-[11px] sm:text-[11.5px] font-medium rounded-t shrink-0 whitespace-nowrap flex items-center gap-1 ${
                   isActive
                     ? 'bg-[#222a3d] text-[#4cd7f6] border-t-2 border-[#4cd7f6] font-bold'
                     : 'text-[#bcc9cd] hover:bg-[#171f33] hover:text-[#dae2fd]'
                 }`}
                 type="button"
               >
-                {t(tab.labelKey, tab.defaultLabel)}
+                {tab.icon && (
+                  <span className="material-symbols-outlined text-[13px] opacity-80">
+                    {tab.icon}
+                  </span>
+                )}
+                <span>{t(tab.labelKey, tab.defaultLabel)}</span>
               </button>
             );
           })}

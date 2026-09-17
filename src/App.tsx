@@ -52,6 +52,9 @@ const Plant3DViewer = lazy(() =>
 const EngineeringReportsView = lazy(() =>
   import('./components/views/EngineeringReportsView').then((m) => ({ default: m.EngineeringReportsView }))
 );
+const MultiChartDashboard = lazy(() =>
+  import('./components/MultiChartDashboard').then((m) => ({ default: m.MultiChartDashboard }))
+);
 
 const ViewLoadingFallback = () => (
   <div className="flex-1 flex items-center justify-center bg-[#060e20] text-[#bcc9cd] min-h-[400px]">
@@ -1263,6 +1266,14 @@ export default function App() {
                   onNavigateToFlowsheet={() => setCurrentTab('flowsheet-canvas')}
                 />
               </Suspense>
+            )}
+
+            {currentTab === 'market-analytics' && (
+              <div className="flex-1 overflow-y-auto bg-[#060e20]">
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <MultiChartDashboard />
+                </Suspense>
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
